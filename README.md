@@ -1,8 +1,8 @@
 # LỚP 2026.1 - THẦY TRUNG - MÃ HỌC PHẦN IT4043E: BIG DATA STORAGE AND PROCESSING
 
-# Online Credit-card Payment Fraud Detection
+# FraudStream - Real-Time Online Payment Fraud Detection
 
-> Hệ thống phát hiện gian lận thanh toán trực tuyến gần thời gian thực theo Lambda Architecture.
+> Hệ thống phát hiện gian lận giao dịch thanh toán trực tuyến theo thời gian thực, xây dựng theo Lambda Architecture.
 
 ## Thành viên nhóm
 
@@ -14,442 +14,258 @@
 | 202416689 | Nguyễn Trung Hiếu |
 | 202416711 | Lê Xuân Nhật Khôi |
 
-## Mục lục
+## 1. Giới thiệu dự án
 
-- [Tổng quan](#tổng-quan)
-- [Bài toán và phạm vi](#bài-toán-và-phạm-vi)
-- [Kiến trúc hệ thống](#kiến-trúc-hệ-thống)
-- [Dữ liệu và simulator](#dữ-liệu-và-simulator)
-- [Schema, chất lượng dữ liệu và features](#schema-chất-lượng-dữ-liệu-và-features)
-- [Công nghệ và hướng dẫn sử dụng](#công-nghệ-và-hướng-dẫn-sử-dụng)
-- [Hướng dẫn triển khai](#hướng-dẫn-triển-khai)
-- [Machine learning và đánh giá](#machine-learning-và-đánh-giá)
-- [Monitoring, kiểm thử và fault tolerance](#monitoring-kiểm-thử-và-fault-tolerance)
-- [Roadmap 8 tuần](#roadmap-8-tuần)
-- [Phân công nhóm](#phân-công-nhóm)
-- [Quy trình Git và demo](#quy-trình-git-và-demo)
+FraudStream là hệ thống phân tích dữ liệu lớn nhằm nhận biết sớm các giao dịch thanh toán trực tuyến có dấu hiệu gian lận. Hệ thống tiếp nhận giao dịch dưới dạng dòng sự kiện, phân tích hành vi của thẻ, khách hàng, thiết bị và merchant, sau đó tính điểm rủi ro cho từng giao dịch.
 
----
+Kết quả dự kiến gồm ba mức quyết định:
 
-## Tổng quan
+| Quyết định | Ý nghĩa |
+|---|---|
+| `APPROVE` | Giao dịch có rủi ro thấp, được chấp nhận |
+| `REVIEW` | Giao dịch đáng ngờ, cần kiểm tra thêm |
+| `BLOCK` | Giao dịch có nguy cơ cao, cần tạm chặn |
 
-Trong thanh toán trực tuyến, hệ thống cần đánh giá một giao dịch trong vài giây trước khi chấp nhận hoặc từ chối. Đồ án xây dựng một data pipeline nhận giao dịch dạng event stream, kết hợp lịch sử hành vi của thẻ/khách hàng/thiết bị, tạo `risk_score` rồi xuất quyết định.
+## 2. Bài toán cần giải quyết
 
-```text
-Ingestion (Kafka) -> Processing (Spark) -> Storage (HDFS + NoSQL) -> Visualization (Grafana/Superset)
-```
+Gian lận thanh toán trực tuyến thường xuất hiện dưới nhiều hình thức:
 
-Mục tiêu là minh chứng một hệ thống Big Data end-to-end với Spark batch và streaming, window aggregation, join optimization, watermark, state management, MLlib, distributed storage, NoSQL, Kubernetes và monitoring. Đây không phải hệ thống ngân hàng thật và không sử dụng dữ liệu thẻ thật.
+- Một thẻ tạo nhiều giao dịch trong thời gian ngắn.
+- Nhiều giao dịch giá trị nhỏ thất bại liên tiếp trước một giao dịch thành công.
+- Giá trị giao dịch cao bất thường so với lịch sử chủ thẻ.
+- Một thiết bị hoặc IP được sử dụng cho nhiều thẻ khác nhau.
+- Giao dịch phát sinh tại merchant, quốc gia hoặc khung giờ không quen thuộc.
 
-## Bài toán và phạm vi
+Hệ thống tập trung vào việc xử lý những tín hiệu này gần thời gian thực, đồng thời lưu dữ liệu lịch sử để phân tích, đánh giá và cải thiện mô hình.
 
-### Nghiệp vụ
+## 3. Mục tiêu
 
-Đầu vào là một giao dịch thanh toán online; đầu ra là một điểm rủi ro và quyết định:
+1. Xây dựng data pipeline hoàn chỉnh: **ingestion -> processing -> storage -> visualization**.
+2. Tiếp nhận giao dịch liên tục qua message queue.
+3. Xử lý batch và streaming bằng Apache Spark.
+4. Tính các đặc trưng hành vi theo cửa sổ thời gian.
+5. Xây dựng mô hình/rule engine tạo điểm rủi ro fraud.
+6. Lưu dữ liệu trên distributed storage và NoSQL database.
+7. Trực quan hóa giao dịch, fraud alert và chỉ số vận hành.
+8. Triển khai các thành phần trong môi trường Kubernetes.
 
-| Quyết định | Ngưỡng demo | Hành động |
-|---|---:|---|
-| `APPROVE` | `risk_score < 40` | Chấp nhận tự động |
-| `REVIEW` | `40 <= risk_score < 70` | Đưa vào hàng đợi kiểm tra |
-| `BLOCK` | `risk_score >= 70` | Tạm chặn và phát alert |
+## 4. Kiến trúc dự kiến
 
-Các fraud scenario cần demo:
-
-| Scenario | Dấu hiệu chính | Features kỳ vọng |
-|---|---|---|
-| Card testing | Giao dịch nhỏ và thất bại liên tiếp | `failed_tx_count_10m`, `tx_count_5m` |
-| Velocity fraud | Một thẻ giao dịch rất nhanh | `tx_count_5m`, `amount_sum_1h` |
-| Device sharing | Một thiết bị/IP dùng nhiều thẻ | `unique_cards_per_device_1h` |
-| High-value anomaly | Amount cao bất thường | `amount_vs_avg_7d` |
-| New merchant/location | Merchant/quốc gia chưa có trong lịch sử | `is_new_merchant`, `is_new_country` |
-
-### Mục tiêu hoàn thành
-
-1. Giao dịch được phát liên tục vào Kafka.
-2. PySpark Structured Streaming validate, deduplicate, xử lý late event và tính features theo event-time.
-3. Raw/curated data được lưu HDFS dạng Parquet; score/alert được phục vụ bằng Cassandra.
-4. Có batch job train/evaluate fraud model bằng Spark MLlib.
-5. Thành phần chính chạy trên Kubernetes, không chỉ Docker đơn lẻ.
-6. Có dashboard metrics, fraud alerts và một demo có thể chạy lại.
-
-### Ngoài phạm vi
-
-- Không kết nối ngân hàng/payment gateway thật.
-- Không lưu số thẻ, CVV, tên hoặc địa chỉ thật.
-- Không xử lý chargeback, KYC hay phát hành model production.
-
-Mọi `card_id`, `device_id`, `ip` đều phải là dữ liệu giả lập hoặc hash một chiều. Không commit `.env`, secrets, dataset gốc, logs, checkpoint và model lớn lên Git.
-
-## Kiến trúc hệ thống
-
-### Lý do chọn Lambda Architecture
-
-- **Speed layer** trả điểm rủi ro khi event đến.
-- **Batch layer** chuẩn hóa lịch sử, backfill late data và retrain model từ fraud label đã xác nhận.
-- **Serving layer** cung cấp kết quả mới nhất cho dashboard và truy vấn.
+Hệ thống sử dụng **Lambda Architecture** để kết hợp xử lý thời gian thực và xử lý dữ liệu lịch sử.
 
 ```mermaid
 flowchart LR
-    A[Dataset công khai] --> B[Fraud simulator]
-    B --> C[(Kafka)]
-    C --> D[Speed layer<br/>Spark Structured Streaming]
-    C --> E[Batch layer<br/>Spark ETL + MLlib]
-    D --> F[(HDFS Data Lake)]
-    E --> F
-    E --> G[Model artifacts]
-    G --> D
-    D --> H[(Cassandra)]
-    D --> I[fraud_alerts]
-    H --> J[Grafana / Superset]
-    F --> J
-    K[Prometheus] --> J
+    A[Dataset lịch sử và Fraud Simulator] --> B[Apache Kafka]
+    B --> C[Speed Layer<br/>Spark Structured Streaming]
+    B --> D[Batch Layer<br/>Spark Batch Processing]
+    C --> E[HDFS Data Lake]
+    D --> E
+    D --> F[Spark MLlib<br/>Model Training]
+    F --> C
+    C --> G[Apache Cassandra]
+    C --> H[Fraud Alerts]
+    E --> I[Dashboard]
+    G --> I
+    J[Prometheus] --> I
 ```
 
-### Vai trò từng thành phần
+### Vai trò các thành phần
 
-| Thành phần | Công nghệ | Vai trò |
-|---|---|---|
-| Producer | Python | Phát transaction events và fraud scenarios |
-| Event bus | Apache Kafka | Lưu, partition và replay event stream |
-| Stream processing | Spark Structured Streaming | Validate, enrich, aggregate, score |
-| Batch processing | Spark SQL + MLlib | ETL lịch sử, feature batch, training |
-| Data lake | HDFS | Raw, cleaned, curated Parquet và checkpoint |
-| NoSQL | Cassandra | Tra cứu risk score/alert theo thẻ và thời gian |
-| Observability | Prometheus + Grafana | Metrics và dashboard |
-| Orchestration | Kubernetes + Helm | Deploy, restart, scale workload |
+| Thành phần | Vai trò |
+|---|---|
+| Kafka | Nhận, lưu đệm và phân phối dòng giao dịch |
+| Spark Structured Streaming | Làm sạch dữ liệu, tính feature và chấm điểm online |
+| Spark Batch | ETL dữ liệu lịch sử, phân tích và huấn luyện mô hình |
+| HDFS | Lưu raw data, cleaned data và curated data |
+| Cassandra | Lưu risk score và fraud alert để truy vấn nhanh |
+| Spark MLlib | Huấn luyện và đánh giá mô hình fraud detection |
+| Prometheus + Grafana | Thu thập metrics và trực quan hóa vận hành |
+| Kubernetes | Triển khai, quản lý và mở rộng các dịch vụ |
 
-### Luồng dữ liệu chi tiết
+## 5. Luồng xử lý dữ liệu
 
-1. Simulator đọc dataset hoặc tạo transaction synthetic, chuẩn hóa event JSON và hash định danh.
-2. Event được gửi vào `transactions_raw`; key là `card_id_hash` để event cùng thẻ có thứ tự tốt hơn.
-3. Spark parse schema, gửi record sai vào `transactions_invalid`.
-4. Spark dùng watermark 15 phút và `transaction_id` để xử lý event đến muộn/trùng lặp.
-5. Pipeline join profile merchant/customer, tính streaming features và chạy rule/model scoring.
-6. Ghi raw/curated/scored data vào HDFS; upsert kết quả mới nhất vào Cassandra.
-7. Đẩy giao dịch `REVIEW`/`BLOCK` vào `fraud_alerts`.
-8. Batch job tạo curated table, đánh giá metrics và publish model version mới.
+1. Fraud simulator phát sự kiện giao dịch vào Kafka.
+2. Spark Streaming đọc giao dịch, kiểm tra schema và loại bỏ bản ghi trùng lặp.
+3. Pipeline xử lý dữ liệu đến muộn bằng watermark và quản lý trạng thái theo event time.
+4. Spark tính các feature hành vi của thẻ, khách hàng, merchant và thiết bị.
+5. Rule engine hoặc mô hình ML tạo `risk_score` và quyết định `APPROVE`, `REVIEW` hoặc `BLOCK`.
+6. Dữ liệu được lưu vào HDFS theo định dạng Parquet; score và alert được ghi vào Cassandra.
+7. Dashboard hiển thị fraud alerts, throughput, latency, Kafka lag và chất lượng dữ liệu.
+8. Batch layer phân tích dữ liệu lịch sử và cập nhật mô hình fraud detection.
 
 ### Kafka topics
 
-| Topic | Key | Mục đích |
+| Topic | Nội dung |
+|---|---|
+| `transactions_raw` | Giao dịch đầu vào từ simulator |
+| `transactions_invalid` | Bản ghi không đạt yêu cầu chất lượng |
+| `fraud_alerts` | Giao dịch có mức `REVIEW` hoặc `BLOCK` |
+| `fraud_feedback` | Nhãn fraud phục vụ phân tích và huấn luyện |
+
+## 6. Dữ liệu và fraud scenarios
+
+### Nguồn dữ liệu
+
+| Dataset | Link | Mục đích |
 |---|---|---|
-| `transactions_raw` | `card_id_hash` | Giao dịch chuẩn hóa đầu vào |
-| `transactions_invalid` | `transaction_id` | Bản ghi sai schema/rule |
-| `fraud_alerts` | `card_id_hash` | Giao dịch review/block |
-| `fraud_feedback` | `transaction_id` | Fraud label xác nhận dùng cho batch retraining |
+| IEEE-CIS Fraud Detection | [Kaggle](https://www.kaggle.com/competitions/ieee-fraud-detection/data) | Phân tích dữ liệu, feature engineering, batch train/test |
+| Credit Card Fraud Detection - ULB | [Kaggle](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) | Baseline model và kiểm thử pipeline |
 
-## Dữ liệu và simulator
+### Fraud simulator
 
-| Dataset | Link | Cách dùng |
-|---|---|---|
-| IEEE-CIS Fraud Detection | [Kaggle](https://www.kaggle.com/competitions/ieee-fraud-detection/data) | EDA sâu, feature engineering, batch train/test |
-| Credit Card Fraud Detection - ULB | [Kaggle](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) | Baseline nhanh và kiểm thử local |
+Simulator tạo dữ liệu giao dịch theo schema chuẩn và phát vào Kafka với tốc độ có thể cấu hình. Các kịch bản bao gồm:
 
-### Quy trình dùng dữ liệu
+| Kịch bản | Mô tả |
+|---|---|
+| Normal traffic | Hành vi giao dịch thông thường |
+| Card testing | Nhiều giao dịch nhỏ, thất bại liên tiếp |
+| Velocity fraud | Một thẻ giao dịch nhiều lần trong thời gian ngắn |
+| Device sharing | Một thiết bị/IP được dùng với nhiều thẻ |
+| High-value anomaly | Giao dịch có giá trị cao bất thường |
 
-1. Tạo tài khoản Kaggle và tải theo điều khoản của Kaggle.
-2. Lưu vào `data/raw/` và thêm thư mục này vào `.gitignore`.
-3. Bắt đầu bằng ULB vì dataset nhỏ, sau đó dùng sample/IEEE-CIS cho batch processing lớn hơn.
-4. Viết adapter chuyển dữ liệu nguồn về transaction schema chung, không đưa tất cả cột nguồn vào pipeline nếu không phục vụ bài toán.
-5. Simulator nhận các tham số `--scenario`, `--rate`, `--duration`, `--bootstrap-server` và seed để tái lập demo.
+## 7. Thiết kế dữ liệu và feature engineering
 
-Simulator phải phát được `normal`, `card_testing`, `velocity_fraud`, `device_sharing`, `high_value_anomaly`, cùng duplicate và late event để test.
-
-## Schema, chất lượng dữ liệu và features
-
-### Transaction schema
+Mỗi giao dịch được chuẩn hóa theo schema sau:
 
 ```json
 {
   "transaction_id": "tx_20261004_000001",
   "event_time": "2026-10-04T09:30:00Z",
   "customer_id": "cus_00128",
-  "card_id_hash": "sha256:example",
+  "card_id_hash": "sha256:...",
   "merchant_id": "merchant_0042",
   "amount": 1250000.0,
   "currency": "VND",
   "channel": "web",
-  "device_id_hash": "sha256:example",
-  "ip_hash": "sha256:example",
+  "device_id_hash": "sha256:...",
+  "ip_hash": "sha256:...",
   "country": "VN",
   "transaction_status": "success"
 }
 ```
 
-### Data quality rules
+Các định danh nhạy cảm đều được giả lập hoặc băm.
 
-| Kiểm tra | Xử lý |
+| Feature | Ý nghĩa |
 |---|---|
-| Thiếu `transaction_id`, `event_time`, `card_id_hash`, `amount`, `merchant_id` | Gửi invalid topic, không score |
-| `amount <= 0` | Invalid record |
-| `transaction_id` trùng | Bỏ duplicate trong watermark window |
-| Late event <= 15 phút | Cập nhật state/window |
-| Late event > 15 phút | Lưu `late_events` để batch backfill |
-| Schema version không hỗ trợ | Gửi invalid topic và tăng metric |
+| `tx_count_5m` | Số giao dịch của một thẻ trong 5 phút |
+| `amount_sum_1h` | Tổng giá trị giao dịch trong 1 giờ |
+| `failed_tx_count_10m` | Số giao dịch thất bại trong 10 phút |
+| `unique_cards_per_device_1h` | Số thẻ dùng cùng một thiết bị trong 1 giờ |
+| `amount_vs_avg_7d` | Tỷ lệ giá trị hiện tại so với mức trung bình 7 ngày |
+| `is_new_merchant` | Merchant mới với khách hàng |
+| `is_new_country` | Quốc gia mới với khách hàng |
 
-### Features tối thiểu
+Data lake lưu dữ liệu theo các lớp `raw`, `cleaned`, `curated`, `late_events` và `models`; dữ liệu phân tích sử dụng Parquet nén Snappy, partition theo ngày/giờ.
 
-| Feature | Ý nghĩa | Kỹ thuật Spark |
+## 8. Công cụ sử dụng
+
+| Công cụ | Vai trò | Hướng dẫn |
 |---|---|---|
-| `tx_count_5m` | Số giao dịch một thẻ trong 5 phút | Sliding window aggregation |
-| `amount_sum_1h` | Tổng tiền một thẻ trong 1 giờ | Stateful aggregation |
-| `failed_tx_count_10m` | Số giao dịch fail gần đây | Conditional aggregation |
-| `unique_cards_per_device_1h` | Số thẻ trên một device | `approx_count_distinct` |
-| `amount_vs_avg_7d` | Amount / trung bình lịch sử | Batch profile + broadcast join |
-| `is_new_merchant` | Merchant mới với khách hàng | Lookup/anti join |
-| `hour_of_day` | Giờ giao dịch | Built-in datetime function |
+| Python 3.11+ | Simulator, PySpark jobs, kiểm thử | [Python Tutorial](https://docs.python.org/3/tutorial/) |
+| Apache Kafka | Distributed event streaming | [Kafka Quickstart](https://kafka.apache.org/quickstart/) |
+| Apache Spark | Batch, Structured Streaming và SQL | [Spark Documentation](https://spark.apache.org/docs/latest/) |
+| Spark MLlib | Huấn luyện và đánh giá model | [Spark MLlib Guide](https://spark.apache.org/docs/latest/ml-guide.html) |
+| HDFS | Distributed file storage | [HDFS User Guide](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsUserGuide.html) |
+| Apache Cassandra | NoSQL serving database | [Cassandra Documentation](https://cassandra.apache.org/doc/latest/) |
+| Kubernetes | Điều phối các workload | [Kubernetes Basics](https://kubernetes.io/docs/tutorials/kubernetes-basics/) |
+| Helm | Quản lý package Kubernetes | [Helm Quickstart](https://helm.sh/docs/intro/quickstart/) |
+| Prometheus + Grafana | Metrics, alert và dashboard | [Grafana Documentation](https://grafana.com/docs/grafana/latest/) |
+| GitHub | Version control, issues và pull requests | [GitHub Flow](https://docs.github.com/en/get-started/using-github/github-flow) |
 
-### Data lake layout
+## 9. Yêu cầu kỹ thuật chính
 
-```text
-/fraud-data/
-  raw/event_date=YYYY-MM-DD/event_hour=HH/
-  cleaned/event_date=YYYY-MM-DD/event_hour=HH/
-  curated/event_date=YYYY-MM-DD/
-  late_events/event_date=YYYY-MM-DD/
-  checkpoints/streaming_scoring/
-  models/model_version=<version>/
-```
+### Spark
 
-Raw có thể là JSON/Avro; cleaned và curated dùng Parquet + Snappy, partition theo ngày/giờ để Spark partition pruning.
+- Window functions và complex aggregations.
+- Chuỗi transformations, UDF và business rules.
+- Broadcast join với profile nhỏ; sort-merge join với dataset lớn.
+- Partition pruning, caching, persistence và execution-plan analysis.
+- Structured Streaming với output modes, watermark, state management và checkpoint.
+- MLlib cho supervised fraud classification.
 
-## Công nghệ và hướng dẫn sử dụng
+### Streaming và storage
 
-| Công cụ | Vai trò | Hướng dẫn chính thức |
-|---|---|---|
-| Python 3.11+ | Simulator, test, PySpark | [Python Tutorial](https://docs.python.org/3/tutorial/) |
-| Apache Kafka | Event streaming | [Kafka Quickstart](https://kafka.apache.org/quickstart/) |
-| Apache Spark | Batch và Structured Streaming | [Spark Streaming Guide](https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html) |
-| Spark MLlib | Train/evaluate model | [MLlib Guide](https://spark.apache.org/docs/latest/ml-guide.html) |
-| HDFS | Distributed storage | [HDFS User Guide](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsUserGuide.html) |
-| Cassandra | NoSQL serving store | [Cassandra Getting Started](https://cassandra.apache.org/doc/latest/cassandra/getting-started/) |
-| Kubernetes | Orchestrate services | [Kubernetes Basics](https://kubernetes.io/docs/tutorials/kubernetes-basics/) |
-| Helm | Cài workload Kubernetes | [Helm Quickstart](https://helm.sh/docs/intro/quickstart/) |
-| Grafana + Prometheus | Dashboard và metrics | [Grafana Docs](https://grafana.com/docs/grafana/latest/getting-started/) |
+- Dùng `transaction_id` để deduplicate và đảm bảo idempotency.
+- Dùng event-time watermark để xử lý late-arriving data.
+- Lưu curated data dạng Parquet, partition theo `event_date` và `event_hour`.
+- Thiết kế Cassandra theo các truy vấn chính: tra cứu score/alert theo thẻ và thời gian.
 
-### Vai trò kỹ thuật cần chứng minh
+### Monitoring
 
-- Kafka: topic/partition, producer-consumer, consumer lag.
-- Spark: multi-stage transformations, UDF, broadcast/sort-merge join, window, watermark, checkpoint, output mode và execution plan.
-- Storage: Parquet, partitioning, compression, hot/cold data, Cassandra data model theo query.
-- Kubernetes: Deployment/StatefulSet, Service, ConfigMap, Secret, resource limit, restart/self-healing.
+- Kafka producer rate, consumer lag và topic throughput.
+- Spark input rate, processed rate, batch duration và state size.
+- Số transaction invalid, duplicate và late.
+- Số giao dịch theo `APPROVE`, `REVIEW`, `BLOCK`.
+- CPU, memory, restart count và trạng thái pod trên Kubernetes.
 
-## Hướng dẫn triển khai
+## 10. Đánh giá mô hình
 
-### Phần mềm cần cài
+Mô hình khởi đầu là Logistic Regression trong Spark MLlib, kết hợp rule-based scoring để so sánh. Khi phù hợp, nhóm đánh giá thêm Random Forest.
 
-```text
-Git, Docker Desktop, Python 3.11+, Java 17, kubectl, Helm 3, Minikube hoặc Kind
-```
+Fraud là bài toán mất cân bằng nhãn, vì vậy các chỉ số đánh giá chính gồm:
 
-Khuyến nghị macOS/Linux/WSL2. Chỉ chọn **một** cluster local là Minikube hoặc Kind cho mỗi máy.
-
-### Clone repository
-
-```bash
-git clone https://github.com/hieunguyen-cyber/BigData_Project.git
-cd BigData_Project
-```
-
-### Python environment
-
-Sau khi nhóm thêm `requirements.txt`:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-Trên Windows PowerShell dùng `.venv\Scripts\Activate.ps1`.
-
-### Kubernetes local
-
-Ví dụ Minikube:
-
-```bash
-minikube start --cpus=4 --memory=8192
-kubectl get nodes
-```
-
-Ví dụ Kind:
-
-```bash
-kind create cluster --name fraud-local
-kubectl cluster-info
-```
-
-### Biến môi trường
-
-Tạo `.env` từ `.env.example` khi repository có các file này. Không commit `.env`.
-
-```text
-KAFKA_BOOTSTRAP_SERVERS=<kafka-service>:9092
-HDFS_NAMENODE_URI=hdfs://<namenode-service>:9000
-CASSANDRA_HOST=<cassandra-service>
-FRAUD_MODEL_URI=/fraud-data/models/model_version=v1
-```
-
-### Trình tự chạy pipeline mục tiêu
-
-1. Tạo cluster Kubernetes.
-2. Deploy Kafka, HDFS, Cassandra, Prometheus và Grafana bằng Helm/manifests.
-3. Kiểm tra pods/services healthy, sau đó tạo Kafka topics.
-4. Chạy batch ETL để có curated tables và model baseline.
-5. Submit Spark streaming job với checkpoint path cố định.
-6. Chạy simulator; mở dashboard kiểm tra traffic, lag, latency và alert.
-
-Mỗi Spark streaming query bắt buộc có `checkpointLocation` riêng. Cần dùng `transaction_id` làm idempotency key cho các sink để retry/restart không nhân alert.
-
-### Target structure
-
-```text
-BigData_Project/
-├── data-generator/      # producer, scenarios, adapters
-├── spark-jobs/          # streaming scoring, batch ETL, train, backfill
-├── common/              # schema, features, rules, config
-├── infra/               # Helm, Kubernetes, monitoring
-├── dashboard/
-├── tests/
-├── docs/
-├── data/                # gitignored
-├── .env.example
-├── requirements.txt
-└── README.md
-```
-
-Đây là cấu trúc mục tiêu; mỗi thư mục được bổ sung bằng pull request có owner, hướng dẫn chạy và tests.
-
-## Machine learning và đánh giá
-
-### Mô hình theo giai đoạn
-
-| Giai đoạn | Phương pháp | Mục tiêu |
-|---|---|---|
-| Baseline 0 | Rule-based risk scoring | Có demo end-to-end sớm, dễ giải thích |
-| Model v1 | Spark MLlib Logistic Regression | Baseline supervised model |
-| Model v2 | Random Forest, nếu đủ thời gian | So sánh chất lượng và trade-off |
-
-Ví dụ rules:
-
-```text
-amount > 3 * avg_amount_7d             -> +30
-tx_count_5m >= 5                        -> +35
-unique_cards_per_device_1h >= 3         -> +40
-failed_tx_count_10m >= 3                -> +20
-```
-
-### Nguyên tắc đánh giá
-
-- Chia train/validation/test theo thời gian để tránh nhìn thấy tương lai.
-- Không dùng `simulation_label` hoặc label tương lai làm online feature.
-- Vì fraud là rare class, không dùng accuracy làm metric chính.
-
-| Metric | Ý nghĩa |
+| Chỉ số | Ý nghĩa |
 |---|---|
-| Precision | Tỷ lệ alert đúng |
-| Recall | Tỷ lệ fraud thật được phát hiện |
-| F1-score | Cân bằng precision/recall |
-| PR-AUC | Phù hợp lớp mất cân bằng |
-| False Positive Rate | Cảnh báo/chặn nhầm |
-| Throughput | Events xử lý mỗi giây |
-| Latency p50/p95 | Thời gian ingest đến quyết định |
+| Precision | Tỷ lệ alert thực sự là fraud |
+| Recall | Tỷ lệ fraud thực tế được phát hiện |
+| F1-score | Cân bằng giữa precision và recall |
+| PR-AUC | Hiệu quả phân loại với lớp fraud hiếm |
+| False Positive Rate | Mức cảnh báo hoặc chặn nhầm |
+| Throughput | Số events xử lý mỗi giây |
+| Latency p50/p95 | Độ trễ từ ingest đến quyết định |
 
-## Monitoring, kiểm thử và fault tolerance
+## 11. Roadmap 8 tuần
 
-### Dashboard cần có
-
-| Nhóm | Metrics |
-|---|---|
-| Kafka | Producer rate, topic throughput, consumer lag |
-| Spark | Input/processed rate, batch duration, state rows, failed batches |
-| Data quality | Invalid, duplicate, late events |
-| Fraud | Số approve/review/block, fraud rate, alert volume |
-| Storage | HDFS usage, Cassandra read/write latency |
-| Kubernetes | CPU/RAM, restart count, pod status |
-
-### Test cases tối thiểu
-
-| Test | Kỳ vọng |
-|---|---|
-| Normal traffic | Phần lớn giao dịch approve |
-| Card testing | Velocity/failure feature tăng và tạo review/block |
-| Duplicate | Một kết quả cuối theo `transaction_id` |
-| Late event trong watermark | Được tính vào state/window |
-| Late event quá watermark | Ghi `late_events` để backfill |
-| Spark restart | Phục hồi checkpoint, không mất/nhân alert |
-| Consumer chậm | Dashboard cho thấy Kafka lag |
-
-Tuning cần báo cáo: partition Kafka/Spark, broadcast join, sort-merge join, Parquet partition pruning, cache/persist, micro-batch size, executor resources và `explain()` trước/sau tối ưu.
-
-## Roadmap 8 tuần
-
-| Tuần | Mục tiêu | Deliverable |
+| Tuần | Mục tiêu | Kết quả |
 |---|---|---|
-| 1 | Chốt scope và thiết kế | Proposal, Lambda diagram, schema, data dictionary, GitHub Issues |
-| 2 | Hiểu data và simulator | EDA, quality rules, adapter, producer với 5 scenarios |
-| 3 | Hạ tầng nền | K8s local, Kafka/HDFS/Cassandra, environment guide |
-| 4 | Batch pipeline | Raw -> cleaned -> curated Parquet, joins/aggregations, quality report |
-| 5 | ML baseline | Feature v1, Logistic Regression, metrics, model artifact |
-| 6 | Streaming scoring | Watermark, dedup, stateful windows, Kafka -> HDFS/Cassandra/alerts |
-| 7 | Quan sát và tối ưu | Dashboard, metrics, benchmark, tuning report |
-| 8 | Bàn giao | Recovery test, report, slides, demo script, video |
+| 1 | Phân tích bài toán và thiết kế | Proposal, architecture, schema, backlog |
+| 2 | EDA và fraud simulator | Data understanding, simulator, quality rules |
+| 3 | Hạ tầng nền | Kubernetes, Kafka, HDFS, Cassandra |
+| 4 | Batch data pipeline | Raw -> cleaned -> curated Parquet |
+| 5 | Machine learning baseline | Feature set, model, evaluation metrics |
+| 6 | Streaming fraud scoring | Watermark, dedup, feature windows, alerts |
+| 7 | Dashboard và tối ưu | Monitoring, benchmark, performance tuning |
+| 8 | Hoàn thiện sản phẩm | Testing, report, slides, demo video |
 
-Kiểm soát tiến độ: cuối tuần 2 phải có event Kafka; cuối tuần 4 có curated Parquet; cuối tuần 6 demo fraud end-to-end; cuối tuần 8 bất kỳ thành viên nào cũng chạy lại được demo theo README.
+## 12. Phân công nhóm
 
-## Phân công nhóm
-
-| Thành viên | Vai trò | Deliverable chính |
+| Thành viên | Vai trò | Công việc chính |
 |---|---|---|
-| Nguyễn Minh Hoàng | Tech lead & Data engineer | Architecture, schema, simulator, Kafka topics, integration README |
-| Lê Trọng Đạt | Spark batch & storage engineer | HDFS, Parquet, batch ETL, joins, partition tuning |
-| Phạm Trung Hiếu | ML engineer | EDA, features, MLlib, model evaluation |
-| Nguyễn Trung Hiếu | Streaming engineer | Structured Streaming, state/watermark/checkpoint, online scoring |
-| Lê Xuân Nhật Khôi | DevOps, monitoring & reporting lead | Kubernetes, Cassandra, Grafana, CI, dashboard, demo/report |
+| Nguyễn Minh Hoàng | Tech lead & Data engineer | Architecture, transaction schema, simulator, Kafka, tích hợp pipeline |
+| Lê Trọng Đạt | Spark batch & storage engineer | HDFS, Parquet, batch ETL, joins, partitioning, storage optimization |
+| Phạm Trung Hiếu | ML engineer | EDA, feature engineering, MLlib, model evaluation |
+| Nguyễn Trung Hiếu | Streaming engineer | Structured Streaming, watermark, checkpoint, state management, online scoring |
+| Lê Xuân Nhật Khôi | DevOps & monitoring lead | Kubernetes, Cassandra, Grafana, CI, dashboard, report/demo coordination |
 
-| Tuần | Hoàng | Đạt | Phạm Trung Hiếu | Nguyễn Trung Hiếu | Nhật Khôi |
-|---|---|---|---|---|---|
-| 1 | Architecture/schema | Storage design | EDA plan | Streaming design | Repo/backlog/K8s plan |
-| 2 | Simulator v1 | Dataset ingestion | EDA/label analysis | Consumer prototype | Local environment guide |
-| 3 | Kafka config | HDFS deploy | Baseline notebook | Spark-Kafka prototype | Helm/K8s deployment |
-| 4 | Quality integration | Batch ETL | Feature spec | Streaming feature prototype | Cassandra schema |
-| 5 | Scenarios | Batch tuning | Train/evaluate | Model loading | Model deployment |
-| 6 | Integration tests | Curated sink | Score validation | Streaming scoring | Dashboard v1 |
-| 7 | Load test | Partition tuning | Error analysis | State tuning | Monitoring/CI |
-| 8 | Demo coordination | Storage evidence | ML evidence | Recovery evidence | Report/slides/video |
+Mỗi thành viên review ít nhất một pull request của thành viên khác và nắm được luồng dữ liệu end-to-end.
 
-Mỗi người review ít nhất một PR của người khác và chuẩn bị được phần phụ trách trong buổi bảo vệ.
+## 13. Quy trình làm việc
 
-## Quy trình Git và demo
+1. Quản lý công việc bằng GitHub Issues, có owner và tiêu chí hoàn thành.
+2. Phát triển trên nhánh `feature/<short-name>` hoặc `fix/<short-name>`.
+3. Mỗi pull request mô tả mục tiêu, cách chạy và kết quả kiểm thử.
+4. Review code trước khi merge vào `main`.
+5. Họp kỹ thuật hai lần mỗi tuần để cập nhật tiến độ, demo và giải quyết blocker.
+6. Tag bản demo cuối mỗi tuần để lưu lại mốc phát triển.
 
-1. Mọi task trên 2 giờ có GitHub Issue với owner và acceptance criteria.
-2. Không commit trực tiếp vào `main`; dùng `feature/<short-name>` hoặc `fix/<short-name>`.
-3. PR phải ghi mục đích, cách chạy, tests đã thực hiện và ảnh hưởng pipeline.
-4. Merge sau tối thiểu một review; tạo tag cuối tuần, ví dụ `week-04-batch-pipeline`.
-5. Họp kỹ thuật hai lần/tuần, 20-30 phút: demo thay đổi, blocker và kế hoạch kế tiếp.
+## 14. Kịch bản demo
 
-### Kịch bản demo cuối kỳ
+1. Khởi động các dịch vụ trên Kubernetes và mở dashboard.
+2. Phát normal traffic từ simulator; quan sát throughput và latency.
+3. Chuyển simulator sang card testing hoặc velocity fraud.
+4. Quan sát feature bất thường, risk score và fraud alert.
+5. Theo dõi alert trong Cassandra, Kafka và dashboard.
+6. Kiểm tra cơ chế checkpoint/recovery của Spark Streaming.
+7. Trình bày batch analytics, model metrics và kết quả tối ưu hiệu năng.
 
-1. Khởi động cluster, xác nhận Kafka/Spark/HDFS/Cassandra healthy.
-2. Chạy normal traffic; dashboard cho thấy phần lớn `APPROVE`.
-3. Chuyển sang `card_testing` hoặc `velocity_fraud`.
-4. Theo dõi features bất thường, `risk_score`, alert trong Cassandra/Kafka/dashboard.
-5. Cho Spark streaming pod restart; xác nhận recovery từ checkpoint và alert không trùng.
-6. Trình bày batch report với Precision, Recall, F1, PR-AUC và ít nhất một tối ưu hiệu năng.
+## 15. Hướng phát triển
 
-## Rủi ro và hướng phát triển
-
-| Rủi ro | Giảm thiểu |
-|---|---|
-| Máy không đủ tài nguyên | Cluster nhỏ, sample data, deploy theo lớp |
-| Dataset schema khác nhau | Adapter + schema chuẩn |
-| Fraud mất cân bằng | Class weighting/sampling, dùng PR-AUC |
-| Streaming state quá lớn | Watermark, TTL, theo dõi state metrics |
-| Retry gây duplicate | Idempotency bằng `transaction_id` |
-| Demo phụ thuộc hạ tầng | Checklist, seed cố định, scripts, fallback local |
-
-Hướng phát triển: tự động retrain khi concept drift, feature store cho online/offline features, graph analysis để phát hiện fraud ring, model explainability, RBAC/secret management/encryption/audit logging đầy đủ hơn.
+- Tự động retraining khi mô hình có dấu hiệu concept drift.
+- Feature store thống nhất feature batch và streaming.
+- Graph analysis để nhận diện fraud ring giữa card, device, IP và merchant.
+- Model explainability cho từng fraud alert.
+- RBAC, secrets management, encryption và audit log đầy đủ hơn.
 
 ## Tài liệu tham khảo
 
