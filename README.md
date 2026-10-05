@@ -232,8 +232,8 @@ Fraud là bài toán mất cân bằng nhãn, vì vậy các chỉ số đánh g
 
 | Thành viên | Vai trò | Công việc chính |
 |---|---|---|
-| Nguyễn Minh Hoàng | Tech lead & Data engineer | Architecture, transaction schema, simulator, Kafka, tích hợp pipeline |
-| Lê Trọng Đạt | Spark batch & storage engineer | HDFS, Parquet, batch ETL, joins, partitioning, storage optimization |
+| Lê Trọng Đạt | Tech lead & Data engineer | Architecture, transaction schema, simulator, Kafka, tích hợp pipeline |
+| Nguyễn Minh Hoàng| Spark batch & storage engineer | HDFS, Parquet, batch ETL, joins, partitioning, storage optimization |
 | Phạm Trung Hiếu | ML engineer | EDA, feature engineering, MLlib, model evaluation |
 | Nguyễn Trung Hiếu | Streaming engineer | Structured Streaming, watermark, checkpoint, state management, online scoring |
 | Lê Xuân Nhật Khôi | DevOps & monitoring lead | Kubernetes, Cassandra, Grafana, CI, dashboard, report/demo coordination |
