@@ -173,7 +173,28 @@ Data lake lưu dữ liệu theo các lớp `raw`, `cleaned`, `curated`, `late_ev
 | Prometheus + Grafana | Metrics, alert và dashboard | [Grafana Documentation](https://grafana.com/docs/grafana/latest/) |
 | GitHub | Version control, issues và pull requests | [GitHub Flow](https://docs.github.com/en/get-started/using-github/github-flow) |
 
-## 9. Yêu cầu kỹ thuật chính
+## 9. Môi trường chuẩn của nhóm
+
+Repository lấy môi trường phát triển hiện có trên máy trưởng nhóm làm mốc thống nhất. Mọi thay đổi về Python packages hoặc công cụ chạy dự án phải được cập nhật đồng thời trong `requirements.txt` và mục này của README.
+
+| Hạng mục | Phiên bản mốc |
+|---|---|
+| Python | 3.12.7 |
+| Java / OpenJDK | 25.0.1 |
+| Git | 2.50.1 |
+| Docker Desktop | 27.5.1 |
+| NumPy | 1.26.4 |
+| pandas | 2.3.3 |
+| scikit-learn | 1.4.2 |
+| pytest | 7.4.4 |
+| python-dotenv | 1.0.1 |
+| PyYAML | 6.0.1 |
+| requests | 2.32.3 |
+| Ruff | 0.11.8 |
+
+Các dịch vụ Big Data như Kafka, HDFS, Cassandra, Spark cluster, Kubernetes và Grafana được quản lý bằng container/Kubernetes thay vì cài Python package tương ứng. `requirements.txt` chỉ quản lý dependencies của mã Python trong repository.
+
+## 10. Yêu cầu kỹ thuật chính
 
 ### Spark
 
@@ -199,7 +220,7 @@ Data lake lưu dữ liệu theo các lớp `raw`, `cleaned`, `curated`, `late_ev
 - Số giao dịch theo `APPROVE`, `REVIEW`, `BLOCK`.
 - CPU, memory, restart count và trạng thái pod trên Kubernetes.
 
-## 10. Đánh giá mô hình
+## 11. Đánh giá mô hình
 
 Mô hình khởi đầu là Logistic Regression trong Spark MLlib, kết hợp rule-based scoring để so sánh. Khi phù hợp, nhóm đánh giá thêm Random Forest.
 
@@ -215,7 +236,7 @@ Fraud là bài toán mất cân bằng nhãn, vì vậy các chỉ số đánh g
 | Throughput | Số events xử lý mỗi giây |
 | Latency p50/p95 | Độ trễ từ ingest đến quyết định |
 
-## 11. Roadmap 8 tuần
+## 12. Roadmap 8 tuần
 
 | Tuần | Mục tiêu | Kết quả |
 |---|---|---|
@@ -228,7 +249,7 @@ Fraud là bài toán mất cân bằng nhãn, vì vậy các chỉ số đánh g
 | 7 | Dashboard và tối ưu | Monitoring, benchmark, performance tuning |
 | 8 | Hoàn thiện sản phẩm | Testing, report, slides, demo video |
 
-## 12. Phân công nhóm
+## 13. Phân công nhóm
 
 | Thành viên | Vai trò | Công việc chính |
 |---|---|---|
@@ -240,7 +261,7 @@ Fraud là bài toán mất cân bằng nhãn, vì vậy các chỉ số đánh g
 
 Mỗi thành viên review ít nhất một pull request của thành viên khác và nắm được luồng dữ liệu end-to-end.
 
-## 13. Quy trình làm việc
+## 14. Quy trình làm việc
 
 1. Quản lý công việc bằng GitHub Issues, có owner và tiêu chí hoàn thành.
 2. Phát triển trên nhánh `feature/<short-name>` hoặc `fix/<short-name>`.
@@ -249,7 +270,7 @@ Mỗi thành viên review ít nhất một pull request của thành viên khác
 5. Họp kỹ thuật hai lần mỗi tuần để cập nhật tiến độ, demo và giải quyết blocker.
 6. Tag bản demo cuối mỗi tuần để lưu lại mốc phát triển.
 
-## 14. Kịch bản demo
+## 15. Kịch bản demo
 
 1. Khởi động các dịch vụ trên Kubernetes và mở dashboard.
 2. Phát normal traffic từ simulator; quan sát throughput và latency.
@@ -259,7 +280,7 @@ Mỗi thành viên review ít nhất một pull request của thành viên khác
 6. Kiểm tra cơ chế checkpoint/recovery của Spark Streaming.
 7. Trình bày batch analytics, model metrics và kết quả tối ưu hiệu năng.
 
-## 15. Hướng phát triển
+## 16. Hướng phát triển
 
 - Tự động retraining khi mô hình có dấu hiệu concept drift.
 - Feature store thống nhất feature batch và streaming.
