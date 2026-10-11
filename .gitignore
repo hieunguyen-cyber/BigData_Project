@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Week 1 EDA: local data and pytest temp
+data/raw/
+data/interim/
+*.csv
+.pytest_tmp/
+.venv-eda/
