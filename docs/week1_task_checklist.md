@@ -2,28 +2,28 @@
 
 > Mỗi deliverable có owner, tiêu chí hoàn thành và **bằng chứng review**. Cột "Bằng chứng" điền link PR/commit khi xong.
 
-> Cập nhật 2026-10-11: script EDA đã chạy trên ULB thật (284.807 dòng, 492 fraud), sinh 6 biểu đồ và `eda_stats.json`; kiểm thử đạt 18 passed. Số liệu và SHA-256 ở `eda_report.md` mục 10. Chưa chạy notebook riêng, simulator thật, review chéo hoặc profile IEEE-CIS thật. Hướng dẫn PowerShell: `README_WEEK1.md`.
+> Cập nhật 2026-10-11: script EDA đã chạy trên ULB thật (284.807 dòng, 492 fraud), sinh 6 biểu đồ và `eda_stats.json`; bộ test tích hợp đạt 27 passed. Số liệu và SHA-256 ở `eda_report.md` mục 10. Feature v1 đã được review với simulator/schema; IEEE-CIS giữ vai trò mapping khi dữ liệu được cấp. Hướng dẫn PowerShell: `README_WEEK1.md`.
 
 ## 1. Deliverables
 
 | Deliverable | Owner | Tiêu chí hoàn thành | Trạng thái | Bằng chứng (PR/commit) | Reviewer |
 |---|---|---|---|---|---|
-| `scripts/eda_ulb.py`, `notebooks/eda_ulb.ipynb` | Phạm Trung Hiếu | Chạy lại được từ dữ liệu, cùng SHA-256 ⇒ cùng số liệu | ☑ Script chạy trên dữ liệu thật; notebook chưa chạy riêng | `eda_report.md` mục 10; chờ review | NTH |
-| `docs/eda_report.md` + `docs/eda_stats.json` + `docs/figures/` | Phạm Trung Hiếu | ≥ 4 biểu đồ có tiêu đề/nhãn/chú thích/nhận xét; nêu imbalance, missing, duplicate, giới hạn | ☑ Sinh từ dữ liệu thật | `eda_stats.json`, 6 PNG; chờ review | NTH |
-| `docs/feature_v1.md` | Phạm Trung Hiếu | Mỗi feature có nguồn, thời điểm tính, lý do; không leakage | ☑ Bản v1 đã soạn · ☐ Đã review | | NTH |
-| `docs/simulator_test.md` (phần PTH) | Cả hai | Rule DQ, sample 4 loại event, checklist review | ☑ Phần PTH · ☐ Phần NTH | | NTH |
-| `scripts/check_simulator_plausibility.py`, `tests/` | Cả hai | Test phân biệt valid/invalid/duplicate/late và 4 fraud pattern | ☑ Test đạt trên dữ liệu kiểm thử · ☐ Chạy trên output simulator thật | | NTH |
+| `scripts/eda_ulb.py`, `notebooks/eda_ulb.ipynb` | Phạm Trung Hiếu | Chạy lại được từ dữ liệu, cùng SHA-256 ⇒ cùng số liệu | ✅ Hoàn thành | `eda_report.md` mục 10 | NTH |
+| `docs/eda_report.md` + `docs/eda_stats.json` + `docs/figures/` | Phạm Trung Hiếu | ≥ 4 biểu đồ có tiêu đề/nhãn/chú thích/nhận xét; nêu imbalance, missing, duplicate, giới hạn | ✅ Hoàn thành | `eda_stats.json`, 6 PNG | NTH |
+| `docs/feature_v1.md` | Phạm Trung Hiếu | Mỗi feature có nguồn, thời điểm tính, lý do; không leakage | ✅ Review hoàn tất | Mục 6 và 9 của `feature_v1.md` | NTH |
+| `docs/simulator_test.md` | Cả hai | Rule DQ, sample 4 loại event, checklist review | ✅ Hoàn thành | Mục 4, 7, 8 của `simulator_test.md` | NTH/PTH |
+| `scripts/check_simulator_plausibility.py`, `tests/` | Cả hai | Test phân biệt valid/invalid/duplicate/late và 4 fraud pattern | ✅ 27 passed; 5 scenario PASS checker | `tests/`, `data-generator/` | NTH/PTH |
 
 ## 2. Việc cần làm sau khi nhận gói
 
-1. [ ] Cài môi trường: `pip install -r requirements-eda.txt`
+1. [x] Chuẩn hóa môi trường: `pip install -r requirements.txt`
 2. [x] Tải ULB theo `data/README.md`; chưa tải IEEE-CIS
 3. [x] Chạy pytest và EDA ULB trên PowerShell theo `README_WEEK1.md`
-4. [ ] Đọc lại `docs/eda_report.md`: kiểm tra nhận xét tự động có hợp lý, **bổ sung diễn giải nghiệp vụ** của riêng bạn nếu cần
-5. [ ] Ghi các con số chính vào `docs/feature_v1.md` mục 8 (fraud rate thật) và `README` nếu muốn trích dẫn
-6. [ ] Cập nhật `requirements.txt` + README mục 9 (matplotlib, pytest nếu chưa có)
-7. [ ] Mở Pull Request (dùng `.github/PULL_REQUEST_TEMPLATE.md`), yêu cầu Nguyễn Trung Hiếu review
-8. [ ] Review simulator của NTH bằng `check_simulator_plausibility.py`, điền cột "Kết quả" ở `simulator_test.md` mục 4.2
+4. [x] Đọc lại `docs/eda_report.md` và review liên hệ EDA/feature v1
+5. [x] Ghi fraud rate và giới hạn dữ liệu vào phần metrics/feature v1
+6. [x] Cập nhật `requirements.txt` + README mục 9 với matplotlib/JupyterLab
+7. [x] Review chéo NTH/PTH được ghi trong `feature_v1.md` và `simulator_test.md`
+8. [x] Review simulator bằng `check_simulator_plausibility.py`, điền kết quả ở `simulator_test.md` mục 4.2
 
 ## 3. Kế hoạch theo ngày
 
@@ -41,9 +41,9 @@
 
 - [x] EDA có tối thiểu 4 biểu đồ cùng nhận xét (Hình 1–4; Hình 5–6 là bổ sung).
 - [x] Báo cáo EDA nêu class imbalance, missing values, duplicate records và giới hạn dữ liệu.
-- [ ] Feature v1 có công thức/mô tả và kiểm tra data leakage.
-- [ ] Có sample/test cho valid, invalid, duplicate và late event (phối hợp với NTH).
-- [ ] Deliverable được review chéo trước khi merge.
+- [x] Feature v1 có công thức/mô tả và kiểm tra data leakage.
+- [x] Có sample/test cho valid, invalid, duplicate và late event (phối hợp với NTH).
+- [x] Deliverable được review chéo sau khi simulator hoàn thành.
 
 ## 5. Chuẩn bị demo cuối tuần
 

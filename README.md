@@ -2,7 +2,7 @@
 
 # FraudStream - Real-Time Online Payment Fraud Detection
 
-Deliverables EDA Week 1 của Phạm Trung Hiếu: [báo cáo và hướng dẫn chạy](README_WEEK1.md). Môi trường EDA riêng dùng `requirements-eda.txt`: Python 3.13.1, NumPy 2.5.2, pandas 2.2.3, matplotlib 3.10.0 đã kiểm thử. Không cài chồng với `requirements.txt` của hệ thống nhóm; dùng môi trường riêng theo hướng dẫn.
+Deliverables Tuần 1: [EDA và hướng dẫn chạy](README_WEEK1.md), [mục tiêu sprint](docs/week_1_target.md), [kiến trúc](docs/problem_and_architecture.md), [data contract](docs/data_dictionary.md). Toàn bộ mã Python dùng chung `requirements.txt` và môi trường chuẩn của nhóm.
 
 > Hệ thống phát hiện gian lận giao dịch thanh toán trực tuyến theo thời gian thực, xây dựng theo Lambda Architecture.
 
@@ -188,6 +188,8 @@ Repository lấy môi trường phát triển hiện có trên máy trưởng nh
 | NumPy | 1.26.4 |
 | pandas | 2.3.3 |
 | scikit-learn | 1.4.2 |
+| matplotlib | 3.9.2 |
+| JupyterLab | 4.2.5 |
 | pytest | 7.4.4 |
 | python-dotenv | 1.0.1 |
 | PyYAML | 6.0.1 |

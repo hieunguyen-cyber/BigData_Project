@@ -605,7 +605,7 @@ và *device sharing theo IP* **không thể kiểm chứng bằng dữ liệu th
 ## 10. Cách chạy lại
 
 ```bash
-pip install -r requirements-eda.txt
+pip install -r requirements.txt
 # đặt creditcard.csv vào data/raw/ (xem data/README.md)
 python scripts/eda_ulb.py --data data/raw/creditcard.csv
 # tuỳ chọn: thêm profile IEEE-CIS

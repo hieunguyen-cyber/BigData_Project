@@ -1,7 +1,7 @@
 # Simulator Test & Data-Quality Rules (W1-04, W1-05)
 
 > Deliverable đồng sở hữu: **Nguyễn Trung Hiếu** (simulator, schema, rule hiện thực) và **Phạm Trung Hiếu** (rule rút ra từ EDA, review tính hợp lý dữ liệu, sample event).
-> Mục có nhãn **[PTH]** do Phạm Trung Hiếu soạn; mục **[NTH]** để Nguyễn Trung Hiếu điền/chốt theo simulator thực tế.
+> Mục có nhãn **[PTH]** do Phạm Trung Hiếu soạn; phần **[NTH]** đã được Nguyễn Trung Hiếu chốt theo simulator thực tế.
 
 ## 1. Phân loại event: valid / invalid / duplicate / late
 
@@ -64,10 +64,12 @@ Phạm Trung Hiếu review simulator theo checklist; kết quả ghi vào cột 
 ### 4.1 Cách chạy
 
 ```bash
-# Sinh file bằng simulator của NTH (lệnh minh hoạ, thay bằng lệnh thật của data-generator/)
+# Sinh file bằng simulator của NTH. Cùng seed/tham số sẽ tạo đúng cùng output.
 python data-generator/producer.py --scenario normal --seed 42 --rate 20 --duration 60 --output out/normal.jsonl
-python data-generator/producer.py --scenario card_testing --seed 42 --output out/card_testing.jsonl
-# ... tương tự velocity_fraud, device_sharing, high_value_anomaly
+python data-generator/producer.py --scenario card_testing --seed 42 --rate 20 --duration 60 --output out/card_testing.jsonl
+python data-generator/producer.py --scenario velocity_fraud --seed 42 --rate 20 --duration 60 --output out/velocity_fraud.jsonl
+python data-generator/producer.py --scenario device_sharing --seed 42 --rate 20 --duration 60 --output out/device_sharing.jsonl
+python data-generator/producer.py --scenario high_value_anomaly --seed 42 --rate 20 --duration 60 --output out/high_value_anomaly.jsonl
 
 python scripts/check_simulator_plausibility.py --file out/normal.jsonl --expect normal
 python scripts/check_simulator_plausibility.py --file out/card_testing.jsonl --expect card_testing
@@ -76,25 +78,25 @@ python scripts/check_simulator_plausibility.py --file out/device_sharing.jsonl -
 python scripts/check_simulator_plausibility.py --file out/high_value_anomaly.jsonl --expect high_value_anomaly
 ```
 
-Checker thoát mã 0 nếu file đúng kỳ vọng, 1 nếu không. Tên tham số của `producer.py` là **ví dụ**; dùng tham số thật của simulator.
+Checker thoát mã 0 nếu file đúng kỳ vọng, 1 nếu không. Có thể gửi cùng event stream vào Kafka bằng cách thêm `--bootstrap-server localhost:9092 --topic transactions_raw`.
 
 ### 4.2 Checklist
 
 | # | Hạng mục review | Tiêu chí | Kết quả |
 |---|---|---|---|
-| R-01 | ≥ 100 event normal liên tiếp đúng schema | `n_valid ≥ 100`, `n_invalid = 0` | ☐ |
-| R-02 | Normal không chứa tín hiệu fraud | ≤ 1% thẻ/thiết bị vượt ngưỡng ở cả 4 tín hiệu | ☐ |
-| R-03 | Card testing tạo ≥ 3 giao dịch failed/thẻ trong 10 phút | `failed_10m` max ≥ 3 | ☐ |
-| R-04 | Velocity fraud tạo ≥ 5 giao dịch/thẻ trong 5 phút | `count_5m` max ≥ 5 | ☐ |
-| R-05 | Device sharing tạo ≥ 3 thẻ/thiết bị trong 1 giờ | `cards_per_device_1h` max ≥ 3 | ☐ |
-| R-06 | High-value anomaly vượt ≥ 5× median của chính thẻ | `amount_ratio` max ≥ 5 | ☐ |
-| R-07 | Phân bố `amount` normal hợp lý | Lệch phải (mean > median), p99 không phi thực tế so với mệnh giá VND, không có `amount ≤ 0` | ☐ |
-| R-08 | Tỷ lệ `failed` trong normal thấp và có thực tế | Tỷ lệ failed normal nhỏ (đề xuất < 5%) | ☐ |
-| R-09 | Phân bố `channel`, `country`, `currency` hợp lý | Không một giá trị chiếm 100% trừ khi có chủ đích (ví dụ VN/VND) | ☐ |
-| R-10 | Fraud chiếm tỷ lệ phù hợp trong luồng hỗn hợp | Fraud là thiểu số rõ rệt (cùng bậc với ULB: dưới ~1–5% cho demo) | ☐ |
-| R-11 | Tái lập theo seed | Cùng seed + tham số ⇒ file giống hệt (so sánh checksum) | ☐ |
-| R-12 | Không dữ liệu định danh thật | Mọi ID nhạy cảm là hash/synthetic | ☐ |
-| R-13 | Mỗi fraud pattern có thể liên hệ feature v1 | Bảng 5 | ☐ |
+| R-01 | ≥ 100 event normal liên tiếp đúng schema | `n_valid ≥ 100`, `n_invalid = 0` | ✅ 1.200 valid events |
+| R-02 | Normal không chứa tín hiệu fraud | ≤ 1% thẻ/thiết bị vượt ngưỡng ở cả 4 tín hiệu | ✅ checker PASS |
+| R-03 | Card testing tạo ≥ 3 giao dịch failed/thẻ trong 10 phút | `failed_10m` max ≥ 3 | ✅ checker PASS |
+| R-04 | Velocity fraud tạo ≥ 5 giao dịch/thẻ trong 5 phút | `count_5m` max ≥ 5 | ✅ checker PASS |
+| R-05 | Device sharing tạo ≥ 3 thẻ/thiết bị trong 1 giờ | `cards_per_device_1h` max ≥ 3 | ✅ checker PASS |
+| R-06 | High-value anomaly vượt ≥ 5× median của chính thẻ | `amount_ratio` max ≥ 5 | ✅ checker PASS |
+| R-07 | Phân bố `amount` normal hợp lý | Lệch phải (mean > median), p99 không phi thực tế so với mệnh giá VND, không có `amount ≤ 0` | ✅ Log-normal, positive amounts |
+| R-08 | Tỷ lệ `failed` trong normal thấp và có thực tế | Tỷ lệ failed normal nhỏ (đề xuất < 5%) | ✅ 20/1.200 = 1,67% |
+| R-09 | Phân bố `channel`, `country`, `currency` hợp lý | Không một giá trị chiếm 100% trừ khi có chủ đích (ví dụ VN/VND) | ✅ web/mobile/api; VN/SG; VND cố ý |
+| R-10 | Fraud chiếm tỷ lệ phù hợp trong luồng hỗn hợp | Fraud là thiểu số rõ rệt (cùng bậc với ULB: dưới ~1–5% cho demo) | N/A - mỗi file kiểm thử một pattern, mixed stream thuộc giai đoạn integration |
+| R-11 | Tái lập theo seed | Cùng seed + tham số ⇒ file giống hệt (so sánh checksum) | ✅ unit test |
+| R-12 | Không dữ liệu định danh thật | Mọi ID nhạy cảm là hash/synthetic | ✅ schema unit test |
+| R-13 | Mỗi fraud pattern có thể liên hệ feature v1 | Bảng 5 | ✅ checker tests và bảng 5 |
 
 Ghi chú R-07/R-10: đây là kiểm tra **bằng mắt kèm số liệu từ checker**, vì mô phỏng không có "đáp án đúng" tuyệt đối; tiêu chí
 ở đây là *đủ hợp lý để demo và kiểm thử feature*, không phải khớp phân bố ngân hàng thật.
@@ -120,17 +122,29 @@ Ghi chú R-07/R-10: đây là kiểm tra **bằng mắt kèm số liệu từ ch
 pytest tests/ -q
 ```
 
-Phần test schema của simulator (validator, producer) do **[NTH]** thêm vào `tests/` (ví dụ `tests/test_schema.py`, `tests/test_scenarios.py`)
-và liệt kê ở bảng trên.
+Test schema và simulator nằm trong `tests/test_schema.py` và `tests/test_scenarios.py`.
 
 ## 7. Hướng dẫn tái lập **[NTH]**
 
-*(điền: lệnh cài đặt, lệnh chạy từng scenario, seed/tham số chuẩn dùng cho demo, nơi lưu output)*
+```bash
+python -m pip install -r requirements.txt
+python -m pytest tests -q
+
+# JSONL local, dùng cho review/checker.
+python data-generator/producer.py --scenario normal --seed 42 --rate 20 --duration 60 \
+  --output out/normal.jsonl --quality-output out/quality_cases.jsonl
+
+# Gửi cùng format vào Kafka khi Kafka đã sẵn sàng.
+python data-generator/producer.py --scenario velocity_fraud --seed 42 --rate 20 --duration 60 \
+  --bootstrap-server localhost:9092 --topic transactions_raw
+```
+
+Seed demo chuẩn là `42`; output local nằm trong `out/` (đã gitignore). `--rate` là số normal events/giây, `--duration` là số giây normal traffic. Fraud events được thêm sau baseline để bảo đảm feature history rõ ràng.
 
 ## 8. Trạng thái nghiệm thu
 
 - [x] Rule data-quality đề xuất từ EDA (mục 2) và sample cho 4 loại event (mục 3) - **PTH**
 - [x] Checker tính hợp lý và test tự động (mục 4, 6) - **PTH**
-- [ ] Chạy checklist R-01…R-13 trên output thật của simulator - *sau khi NTH hoàn tất simulator*
-- [ ] Hướng dẫn tái lập (mục 7) và test schema/validator - **NTH**
-- [ ] Hai bên review chéo và đồng ý rule DQ-02 (xử lý `amount = 0`)
+- [x] Chạy checklist R-01…R-13 trên output thật của simulator - 5 scenario PASS checker
+- [x] Hướng dẫn tái lập (mục 7) và test schema/validator - **NTH**
+- [x] Hai bên review chéo và đồng ý rule DQ-02: `amount <= 0` là invalid

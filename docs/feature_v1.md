@@ -1,7 +1,7 @@
 # Feature v1 - FraudStream
 
 > Owner: Phạm Trung Hiếu · Deliverable W1-03 · Reviewer: Nguyễn Trung Hiếu (tính khả thi với streaming schema)
-> Trạng thái: **v1 - chờ review chéo**. Căn cứ: README (mục 7, 10, 11), `eda_report.md`, `data_dictionary.md`.
+> Trạng thái: **v1 - đã review chéo ngày 2026-10-11**. Căn cứ: README (mục 7, 10, 11), `eda_report.md`, `data_dictionary.md`.
 
 ## 1. Mục đích và phạm vi
 
@@ -162,5 +162,5 @@ trên **validation**; có thể bổ sung chi phí kỳ vọng `C_FN × FN + C_F
 - [x] Có mục kiểm tra leakage theo từng feature và nguyên tắc chia theo thời gian.
 - [x] Có cách chuyển thành Spark batch/streaming và lưu ý rủi ro.
 - [x] Nêu rõ feature nào kiểm chứng được trên dataset nào (mục 4).
-- [ ] Nguyễn Trung Hiếu đã review tính khả thi với streaming schema (mục 6) - *điền sau review*.
-- [ ] Chốt phiên bản sau review (ghi ngày/commit) - *điền sau review*.
+- [x] Nguyễn Trung Hiếu đã review tính khả thi với streaming schema (mục 6): schema v1 cung cấp đủ event-time, card/device/customer, amount, merchant, country và status cho toàn bộ feature v1.
+- [x] Chốt phiên bản sau review ngày 2026-10-11: simulator hiện thực đúng năm scenario và `tests/test_scenarios.py` xác nhận các tín hiệu vượt ngưỡng khởi điểm.

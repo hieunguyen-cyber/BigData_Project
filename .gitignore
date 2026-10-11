@@ -225,3 +225,5 @@ data/interim/
 *.csv
 .pytest_tmp/
 .venv-eda/
+out/
+.DS_Store

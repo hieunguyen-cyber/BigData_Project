@@ -195,7 +195,7 @@ và *device sharing theo IP* **không thể kiểm chứng bằng dữ liệu th
 ## 10. Cách chạy lại
 
 ```bash
-pip install -r requirements-eda.txt
+pip install -r requirements.txt
 # đặt creditcard.csv vào data/raw/ (xem data/README.md)
 python scripts/eda_ulb.py --data data/raw/creditcard.csv
 # tuỳ chọn: thêm profile IEEE-CIS
@@ -207,5 +207,5 @@ Thông tin tái lập:
 
 - File dữ liệu: `creditcard.csv` (150,828,752 bytes)
 - SHA-256: `76274b691b16a6c49d3f159c883398e03ccd6d1ee12d9d8ee38f4b4b98551a89`
-- Python 3.13.1, pandas 3.0.6, numpy 2.5.4, matplotlib 3.11.2
+- Historical EDA snapshot: Python 3.13.1, pandas 3.0.6, numpy 2.5.4, matplotlib 3.11.2. New runs use the project baseline declared in `requirements.txt`; generated metadata records the exact environment used.
 - Cùng SHA-256 + cùng phiên bản thư viện ⇒ cùng số liệu (script không dùng ngẫu nhiên).
