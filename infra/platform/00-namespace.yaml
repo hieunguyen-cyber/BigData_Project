@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fraudstream
+  labels:
+    app.kubernetes.io/part-of: fraudstream
+    environment: local-dev
+    managed-by: platform-team

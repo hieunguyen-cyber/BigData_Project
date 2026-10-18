@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cassandra
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: cassandra
+    app.kubernetes.io/part-of: fraudstream
+spec:
+  clusterIP: None
+  ports:
+    - port: 9042
+      name: cql
+      protocol: TCP
+    - port: 7000
+      name: intra-node
+      protocol: TCP
+    - port: 7001
+      name: tls-intra-node
+      protocol: TCP
+    - port: 7199
+      name: jmx
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: cassandra
+---
+# Standard ClusterIP service for external/client pods within the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: cassandra-client
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: cassandra
+    app.kubernetes.io/part-of: fraudstream
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9042
+      targetPort: 9042
+      name: cql
+  selector:
+    app.kubernetes.io/name: cassandra

@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cassandra-env-config
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: cassandra
+    app.kubernetes.io/part-of: fraudstream
+data:
+  CASSANDRA_CLUSTER_NAME: "FraudStreamCluster"
+  CASSANDRA_DC: "datacenter1"
+  CASSANDRA_RACK: "rack1"
+  CASSANDRA_ENDPOINT_SNITCH: "GossipingPropertyFileSnitch"
+  # JVM memory tuning for local development (conserves Docker memory)
+  MAX_HEAP_SIZE: "512M"
+  HEAP_NEWSIZE: "128M"
+  CASSANDRA_SEEDS: "cassandra-0.cassandra.fraudstream.svc.cluster.local"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cassandra-auth-secret
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: cassandra
+    app.kubernetes.io/part-of: fraudstream
+type: Opaque
+stringData:
+  # Safe default credentials for local development
+  CASSANDRA_USER: "cassandra"
+  CASSANDRA_PASSWORD_SEED: "cassandra"

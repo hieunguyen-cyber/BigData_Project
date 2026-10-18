@@ -2,7 +2,7 @@
 
 # FraudStream - Real-Time Online Payment Fraud Detection
 
-Deliverables Tuần 1: [EDA và hướng dẫn chạy](README_WEEK1.md), [mục tiêu sprint](docs/week_1_target.md), [kiến trúc](docs/problem_and_architecture.md), [data contract](docs/data_dictionary.md), [trạng thái tích hợp](docs/week1_integration.md). Deliverables Tuần 2: [hạ tầng nền cho Đạt và Khôi](docs/week_2_target.md). Toàn bộ mã Python dùng chung `requirements.txt` và môi trường chuẩn của nhóm.
+Deliverables Tuần 1: [EDA và hướng dẫn chạy](README_WEEK1.md), [mục tiêu sprint](docs/week_1_target.md), [kiến trúc](docs/problem_and_architecture.md), [data contract](docs/data_dictionary.md), [trạng thái tích hợp](docs/week1_integration.md). Deliverables Tuần 2: [mục tiêu hạ tầng nền](docs/week_2_target.md), [hướng dẫn triển khai](docs/week_2_deployment.md), [bằng chứng kiểm thử](docs/week_2_test_evidence.md). Toàn bộ mã Python dùng chung `requirements.txt` và môi trường chuẩn của nhóm.
 
 > Hệ thống phát hiện gian lận giao dịch thanh toán trực tuyến theo thời gian thực, xây dựng theo Lambda Architecture.
 

@@ -1,0 +1,21 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: fraudstream-cluster
+networking:
+  ipFamily: ipv4
+  apiServerAddress: "127.0.0.1"
+  apiServerPort: 6443
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.29.2
+    extraPortMappings:
+      # Port mapping for host access if needed (NodePort or direct forward)
+      - containerPort: 30092
+        hostPort: 9042
+        protocol: TCP
+      - containerPort: 30093
+        hostPort: 9092
+        protocol: TCP
+      - containerPort: 30098
+        hostPort: 9870
+        protocol: TCP

@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cassandra
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: cassandra
+    app.kubernetes.io/part-of: fraudstream
+    app.kubernetes.io/component: serving-database
+spec:
+  serviceName: cassandra
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cassandra
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cassandra
+        app.kubernetes.io/part-of: fraudstream
+        app.kubernetes.io/component: serving-database
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: cassandra
+          image: cassandra:4.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9042
+              name: cql
+            - containerPort: 7000
+              name: intra-node
+            - containerPort: 7001
+              name: tls-intra-node
+            - containerPort: 7199
+              name: jmx
+          envFrom:
+            - configMapRef:
+                name: cassandra-env-config
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "1.5Gi"
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - "cqlsh -e 'describe cluster' 127.0.0.1 9042"
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - "nodetool status | grep -E '^UN\\s+${POD_IP}'"
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: cassandra-data
+              mountPath: /var/lib/cassandra
+  volumeClaimTemplates:
+    - metadata:
+        name: cassandra-data
+        labels:
+          app.kubernetes.io/name: cassandra
+          app.kubernetes.io/part-of: fraudstream
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 5Gi
