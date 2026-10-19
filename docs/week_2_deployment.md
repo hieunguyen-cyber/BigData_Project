@@ -99,6 +99,19 @@ kubectl cluster-info --context kind-fraudstream-cluster
 kubectl get nodes
 ```
 
+**Môi trường Mac của Hoàng:** Kind 0.33.0, kubectl 1.34.1. Tạo cluster
+Kubernetes 1.34.11 bằng cách ghi đè image cho lần chạy này (file cấu hình
+chung vẫn giữ 1.29.2):
+
+```bash
+kind create cluster --config infra/kind/kind-cluster.yaml \
+  --image kindest/node:v1.34.11@sha256:44e222ee2132dab25ff87301682f89eb82c7880ea3a1bf543bfe9708fd08d67d \
+  --wait 5m
+```
+
+Chọn một lệnh tạo cluster phù hợp môi trường; không chạy cả hai để tạo
+cùng tên cluster. kubectl nên chênh tối đa một minor version với Kubernetes.
+
 ### Bước 3.2: Khởi tạo Namespace & Resource Quota
 ```bash
 kubectl apply -f infra/platform/00-namespace.yaml
@@ -158,16 +171,81 @@ bash infra/cassandra/smoke_test.sh --test-persistence
 
 ## 5. Triển khai Apache Kafka (Nguyễn Minh Hoàng)
 
-1. Triển khai Kafka broker (KRaft mode, 1 replica) trong namespace `fraudstream`.
-2. Tạo 4 topics chuẩn:
-   - `transactions_raw` (Partition: 3, Retention: 168h)
-   - `transactions_invalid` (Partition: 1, Retention: 72h)
-   - `fraud_alerts` (Partition: 3, Retention: 168h)
-   - `fraud_feedback` (Partition: 1, Retention: 720h)
-3. Chạy smoke test phát tối thiểu 100 event từ simulator:
-   ```bash
-   python data-generator/producer.py --bootstrap-server kafka.fraudstream.svc.cluster.local:9092 --scenario normal --rate 20 --duration 5
-   ```
+Phần Kafka có ba file: `infra/kafka/kafka.yaml` để triển khai,
+`bootstrap_topics.sh` để tạo topics và `smoke_test.py` để kiểm tra
+health/config, gửi–đọc dữ liệu và persistence. Hướng dẫn tập trung tại mục
+này; kết quả chạy thực tế ghi trong `week_2_test_evidence.md`.
+
+Triển khai Kafka 3.9.1, một node KRaft kiêm broker/controller, PVC 5 GiB
+và JVM heap tối đa 512 MiB. Requests: 250m CPU / 512 MiB; limits:
+1 CPU / 1536 MiB. Có startup/readiness/liveness probes.
+
+```bash
+kubectl apply -f infra/kafka/kafka.yaml
+kubectl rollout status statefulset/kafka -n fraudstream --timeout=300s
+kubectl get pods,pvc,svc -n fraudstream
+bash infra/kafka/bootstrap_topics.sh
+```
+
+Chạy lại bootstrap để kiểm tra idempotency. Script kiểm tra cấu hình thực
+tế và trả lỗi nếu topic có sẵn nhưng không đúng partition/RF/retention.
+
+| Topic | Partitions | Retention | Replication factor |
+|---|---:|---:|---:|
+| `transactions_raw` | 3 | 168 giờ | 1 |
+| `transactions_invalid` | 1 | 72 giờ | 1 |
+| `fraud_alerts` | 3 | 168 giờ | 1 |
+| `fraud_feedback` | 1 | 720 giờ | 1 |
+
+Raw/alerts có 3 partitions để chuẩn bị consumer song song; invalid/feedback
+có 1 partition cho demo lưu lượng thấp. Feedback giữ 30 ngày để phục vụ
+training. RF=1 phù hợp một broker local, không có khả năng chịu mất broker.
+
+**Endpoint bàn giao:** `kafka.fraudstream.svc.cluster.local:9092`, giao thức
+PLAINTEXT, key UTF-8 là `card_id_hash`, value là JSON UTF-8 theo data contract.
+Endpoint này dùng từ pod trong cluster; chưa có listener cho client trên Mac.
+Kafka chỉ lưu/phân phối sự kiện; Spark ở tuần sau chịu trách nhiệm tạo
+invalid events, alerts và scoring.
+
+Chạy smoke test từ Mac/Linux với Python 3 và kubectl (không cần thêm Python packages):
+
+```bash
+python3 infra/kafka/smoke_test.py
+python3 infra/kafka/smoke_test.py --test-persistence
+```
+
+Script tạo client pod từ `apache/kafka:3.9.1`, dùng simulator tạo 100 events,
+gửi bằng Kafka CLI với key, đọc đúng khoảng offsets mới, kiểm tra JSON/schema,
+key và từng transaction ID. Client pod được xóa sau khi chạy.
+Tùy chọn persistence tạo lại client và broker pod rồi đọc lại chính 100
+events đã gửi trước restart, kiểm tra UID pod đổi và PVC/PV giữ nguyên.
+Báo cáo mỗi lần chạy ở `out/kafka_smoke_<run_id>.json` (gitignored), không
+commit log/output của từng lượt chạy.
+
+Kiểm tra riêng phần Hoàng qua script chung:
+
+```bash
+bash infra/scripts/verify_infra.sh --kafka-only
+```
+
+Lệnh kiểm tra pod Ready, PVC Bound, bốn topic đúng cấu hình và smoke test
+100 events. Thiếu broker/topic/PVC hoặc lỗi đọc–ghi đều trả exit code khác 0.
+Kiểm tra chỉ đọc, không gửi event:
+
+```bash
+python3 infra/kafka/smoke_test.py --check-only
+```
+
+PowerShell: `.\infra\scripts\verify_infra.ps1 -KafkaOnly` (mặc định dùng `python`).
+Nếu dùng `python3`, thêm `-PythonCommand python3`. Trên Windows, bootstrap
+Bash chạy trong Git Bash; smoke test Python có thể chạy từ PowerShell.
+
+`--namespace` hoặc `KAFKA_NAMESPACE` chọn namespace, `KAFKA_POD` chọn
+broker pod và `KAFKA_BOOTSTRAP_SERVER` ghi đè endpoint. `KAFKA_TOPIC` chọn
+topic gửi thử (mặc định `transactions_raw`). Các kiểm tra dùng context
+kubectl hiện tại và in rõ context/endpoint trước khi chạy. Mỗi lượt có
+transaction ID riêng và khoảng offsets mới nên chạy lại không nhầm dữ
+liệu cũ. Bootstrap dừng nếu topic có sẵn nhưng sai cấu hình; không xóa topic.
 
 ---
 
@@ -203,7 +281,7 @@ bash infra/scripts/verify_infra.sh
 Script sẽ tuần tự kiểm tra:
 1. Trạng thái Kubernetes Nodes, CoreDNS và PVCs.
 2. Trạng thái Cassandra (`UN`), schema keyspace và smoke test query.
-3. Trạng thái Kafka broker và sự hiện diện của 4 topics bắt buộc.
+3. Kafka pod Ready, PVC Bound, cấu hình 4 topics và producer/consumer 100 events.
 4. Trạng thái HDFS NameNode và 6 thư mục Data Lake chuẩn.
 
 ---
@@ -211,6 +289,15 @@ Script sẽ tuần tự kiểm tra:
 ## 8. Quy trình Dọn dẹp & Hủy Hạ tầng (Teardown)
 
 Khi muốn tạm dừng hoặc dọn dẹp tài nguyên máy:
+
+Chỉ gỡ Kafka, giữ PVC và các dịch vụ khác:
+
+```bash
+kubectl delete -f infra/kafka/kafka.yaml
+```
+
+PVC do StatefulSet tạo được giữ lại để lần deploy sau dùng lại dữ liệu.
+Các lệnh xóa namespace/cluster dưới đây xóa cả dữ liệu Kafka của môi trường local.
 
 ### 1. Dọn dẹp workloads trong namespace (giữ cluster):
 ```bash
@@ -225,6 +312,15 @@ kind delete cluster --name fraudstream-cluster
 ---
 
 ## 9. Hướng dẫn Xử lý Sự cố Thường gặp (Troubleshooting)
+
+**Kafka:** nếu pod không Ready, xem `kubectl describe pod kafka-0 -n fraudstream`
+và `kubectl logs kafka-0 -n fraudstream --tail=80`. Nếu PVC Pending, kiểm tra
+StorageClass `standard` và events của pod. CLI trong image nằm tại
+`/opt/kafka/bin/`, không giả định `kafka-topics.sh` có trong PATH.
+Lỗi DNS từ laptop: dùng smoke test có client pod; endpoint nội bộ không
+được thiết kế cho producer kết nối trực tiếp từ Mac. Nếu sửa ConfigMap,
+chạy `kubectl rollout restart statefulset/kafka -n fraudstream` để pod nhận
+biến môi trường mới.
 
 ### 1. Pod Cassandra ở trạng thái `Pending`
 - **Nguyên nhân**: Thiếu tài nguyên CPU/RAM hoặc StorageClass không cấp phát được PVC.

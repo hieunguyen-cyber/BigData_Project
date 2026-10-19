@@ -1,0 +1,129 @@
+# Kafka local demo: one node acts as both broker and KRaft controller.
+# Owner: Nguyen Minh Hoang. Clients connect from inside the cluster.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-config
+  namespace: fraudstream
+data:
+  CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+  KAFKA_NODE_ID: "1"
+  KAFKA_PROCESS_ROLES: "broker,controller"
+  KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+  KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka.fraudstream.svc.cluster.local:9092"
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+  KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+  KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+  KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-0.kafka-headless.fraudstream.svc.cluster.local:9093"
+  KAFKA_LOG_DIRS: "/var/lib/kafka/data/logs"
+  KAFKA_NUM_PARTITIONS: "3"
+  KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+  KAFKA_MIN_INSYNC_REPLICAS: "1"
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+---
+# Stable DNS for the KRaft controller, including during startup.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-headless
+  namespace: fraudstream
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: kafka
+  ports:
+    - name: broker
+      port: 9092
+    - name: controller
+      port: 9093
+---
+# Endpoint for simulator, consumer and future Spark jobs.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: fraudstream
+spec:
+  selector:
+    app.kubernetes.io/name: kafka
+  ports:
+    - name: broker
+      port: 9092
+      targetPort: broker
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: fraudstream
+spec:
+  serviceName: kafka-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka
+        app.kubernetes.io/part-of: fraudstream
+    spec:
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: kafka
+          image: apache/kafka:3.9.1
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: kafka-config
+          ports:
+            - name: broker
+              containerPort: 9092
+            - name: controller
+              containerPort: 9093
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+          startupProbe:
+            tcpSocket:
+              port: broker
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - /opt/kafka/bin/kafka-broker-api-versions.sh
+                - --bootstrap-server
+                - localhost:9092
+            periodSeconds: 20
+            timeoutSeconds: 15
+          livenessProbe:
+            tcpSocket:
+              port: broker
+            periodSeconds: 20
+            failureThreshold: 6
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 5Gi
