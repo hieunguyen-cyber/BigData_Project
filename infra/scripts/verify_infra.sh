@@ -9,6 +9,16 @@ set -euo pipefail
 
 NAMESPACE="fraudstream"
 FAILED_CHECKS=0
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+# Hoang can verify Kafka independently before Cassandra/HDFS are deployed.
+if [[ "${1:-}" == "--kafka-only" && "$#" -eq 1 ]]; then
+    exec "${PYTHON_BIN}" "${SCRIPT_DIR}/../kafka/smoke_test.py" --namespace "${NAMESPACE}"
+elif [[ "$#" -ne 0 ]]; then
+    echo "Usage: bash infra/scripts/verify_infra.sh [--kafka-only]" >&2
+    exit 2
+fi
 
 echo "=================================================================="
 echo " FraudStream Infrastructure Verification (verify_infra.sh)"
@@ -108,32 +118,10 @@ fi
 # ------------------------------------------------------------------
 echo ""
 echo "--- [3/4] Apache Kafka Event Stream ---"
-KAFKA_POD=$(kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=kafka -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-if [[ -n "${KAFKA_POD}" ]]; then
-    KAFKA_STATUS=$(kubectl get pod "${KAFKA_POD}" -n "${NAMESPACE}" -o jsonpath='{.status.phase}')
-    if [[ "${KAFKA_STATUS}" == "Running" ]]; then
-        log_pass "Kafka pod ${KAFKA_POD} is Running."
-        
-        # Check topics if kafka-topics.sh or rpk/exec is available
-        TOPICS=$(kubectl exec -n "${NAMESPACE}" "${KAFKA_POD}" -- kafka-topics.sh --bootstrap-server localhost:9092 --list 2>/dev/null || true)
-        REQUIRED_TOPICS=("transactions_raw" "transactions_invalid" "fraud_alerts" "fraud_feedback")
-        ALL_TOPICS_FOUND=true
-        for t in "${REQUIRED_TOPICS[@]}"; do
-            if echo "${TOPICS}" | grep -q "^${t}$"; then
-                log_pass "Kafka topic found: ${t}"
-            else
-                log_warn "Kafka topic missing: ${t}"
-                ALL_TOPICS_FOUND=false
-            fi
-        done
-        if [[ "${ALL_TOPICS_FOUND}" == "true" ]]; then
-            log_pass "All 4 required Kafka topics are active."
-        fi
-    else
-        log_fail "Kafka pod ${KAFKA_POD} is in state ${KAFKA_STATUS}"
-    fi
+if "${PYTHON_BIN}" "${SCRIPT_DIR}/../kafka/smoke_test.py" --namespace "${NAMESPACE}"; then
+    log_pass "Kafka pod/PVC/topics and 100-event producer-consumer test passed."
 else
-    log_warn "Kafka pod not yet deployed (Waiting for Hoàng's deliverable: infra/kafka/)"
+    log_fail "Kafka verification failed (pod, PVC, topics, or producer-consumer test)."
 fi
 
 # ------------------------------------------------------------------

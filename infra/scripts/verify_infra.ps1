@@ -5,8 +5,20 @@
     Contributors: Nguyễn Minh Hoàng, Lê Trọng Đạt, Lê Xuân Nhật Khôi
 #>
 
+param (
+    [switch]$KafkaOnly,
+    [string]$PythonCommand = "python"
+)
+
 $Namespace = "fraudstream"
 $FailedChecks = 0
+$KafkaVerifier = Join-Path $PSScriptRoot "../kafka/smoke_test.py"
+
+if ($KafkaOnly) {
+    & $PythonCommand $KafkaVerifier --namespace $Namespace
+    if (-not $? -or $LASTEXITCODE -ne 0) { exit 1 }
+    exit 0
+}
 
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host " FraudStream Infrastructure Verification (verify_infra.ps1)" -ForegroundColor Cyan
@@ -96,16 +108,11 @@ if ($LASTEXITCODE -eq 0) {
 
 # 3. Apache Kafka Verification
 Write-Host "`n--- [3/4] Apache Kafka Event Stream ---" -ForegroundColor Cyan
-$kafkaPods = kubectl get pods -n $Namespace -l app.kubernetes.io/name=kafka -o jsonpath='{.items[0].metadata.name}' 2>&1
-if ($kafkaPods -and $kafkaPods -notmatch "Error") {
-    $kStatus = kubectl get pod $kafkaPods -n $Namespace -o jsonpath='{.status.phase}' 2>&1
-    if ($kStatus -eq "Running") {
-        Log-Pass "Kafka pod $kafkaPods is Running."
-    } else {
-        Log-Fail "Kafka pod $kafkaPods is in state $kStatus"
-    }
+& $PythonCommand $KafkaVerifier --namespace $Namespace
+if ($? -and $LASTEXITCODE -eq 0) {
+    Log-Pass "Kafka pod/PVC/topics and 100-event producer-consumer test passed."
 } else {
-    Log-Warn "Kafka pod not yet deployed (Waiting for Hoàng's deliverable: infra/kafka/)"
+    Log-Fail "Kafka verification failed (pod, PVC, topics, or producer-consumer test)."
 }
 
 # 4. Apache HDFS Verification
