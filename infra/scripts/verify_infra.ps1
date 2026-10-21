@@ -59,7 +59,7 @@ $dnsPods = kubectl get pods -n kube-system -l k8s-app=kube-dns --no-headers 2>&1
 if ($dnsPods -match "Running") {
     Log-Pass "CoreDNS service is Running."
 } else {
-    Log-Warn "CoreDNS pods not in Running state."
+    Log-Fail "CoreDNS pods are not in Running state."
 }
 
 $pvcs = kubectl get pvc -n $Namespace --no-headers 2>&1
@@ -90,14 +90,14 @@ if ($LASTEXITCODE -eq 0) {
         if ($ksCheck -match "fraudstream") {
             Log-Pass "Keyspace 'fraudstream' exists and is accessible."
         } else {
-            Log-Warn "Keyspace 'fraudstream' not initialized. Run smoke test or bootstrap."
+            Log-Fail "Keyspace 'fraudstream' is not initialized. Run the Cassandra smoke test."
         }
 
         $queryCheck = kubectl exec -n $Namespace cassandra-0 -- cqlsh -e "SELECT count(*) FROM fraudstream.transaction_risk;" 2>&1
         if ($queryCheck -match "count") {
             Log-Pass "CQL query execution passed without ALLOW FILTERING."
         } else {
-            Log-Warn "CQL query verification skipped or table empty."
+            Log-Fail "CQL query verification failed. Run the Cassandra smoke test."
         }
     } else {
         Log-Fail "Cassandra pod is in state: $cassStatus"
@@ -122,11 +122,20 @@ if ($nnPods -and $nnPods -notmatch "Error") {
     $nnStatus = kubectl get pod $nnPods -n $Namespace -o jsonpath='{.status.phase}' 2>&1
     if ($nnStatus -eq "Running") {
         Log-Pass "HDFS NameNode pod $nnPods is Running."
+        $requiredPaths = @("/fraud-data/raw", "/fraud-data/cleaned", "/fraud-data/curated", "/fraud-data/late_events", "/fraud-data/checkpoints", "/fraud-data/models")
+        foreach ($path in $requiredPaths) {
+            kubectl exec -n $Namespace $nnPods -- hdfs dfs -test -d $path 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Log-Pass "HDFS path exists: $path"
+            } else {
+                Log-Fail "Required HDFS path is missing: $path"
+            }
+        }
     } else {
         Log-Fail "HDFS NameNode pod is in state $nnStatus"
     }
 } else {
-    Log-Warn "HDFS NameNode not yet deployed (Waiting for Đạt's deliverable: infra/hdfs/)"
+    Log-Fail "HDFS NameNode not deployed; full W2 verification cannot pass."
 }
 
 # Summary

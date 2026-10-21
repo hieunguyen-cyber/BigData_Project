@@ -4,8 +4,9 @@ Tài liệu ghi lại kết quả smoke test, thông số môi trường, mức 
 
 **Phạm vi bằng chứng:** mục 1–3 giữ snapshot Windows/Cassandra đã có của
 Khôi. Mục 4 là kết quả Kafka thực tế của Hoàng trên Mac ngày **2026-10-19**
-(UTC+7). Mục 5 vẫn là mẫu HDFS chờ Đạt điền. Không gộp các snapshot này
-thành một lần kiểm thử end-to-end đã hoàn tất.
+(UTC+7). HDFS chưa có implementation nên không có bằng chứng HDFS. Các
+snapshot này không phải một lần kiểm thử end-to-end; `verify_infra` đầy đủ
+được thiết kế để fail cho đến khi HDFS hoàn thành.
 
 ---
 
@@ -17,11 +18,12 @@ Bảng phiên bản công cụ thực tế sử dụng trong kiểm thử:
 |---|---|---|
 | **Hệ điều hành** | Windows 11 Pro (WSL 2 backend) | Kernel 5.15+ |
 | **Docker Desktop** | 27.5.1 | Allocated 10 GB RAM, 4 CPUs |
-| **Kubernetes (Kind)** | v1.29.2 (`kindest/node:v1.29.2`) | Kind v0.22.0 |
-| **kubectl** | Client v1.30+ | Tương thích k8s v1.29 |
+| **Kubernetes (Kind), snapshot Cassandra** | v1.29.2 (`kindest/node:v1.29.2`) | Kind v0.22.0; bằng chứng lịch sử |
+| **Kubernetes (Kind), chuẩn repo hiện tại** | v1.34.11 (đã pin trong `infra/kind/`) | Chuẩn theo lần kiểm thử Kafka trên Mac |
+| **kubectl** | Client v1.30+ / 1.34.1 | Tương thích từng snapshot tương ứng |
 | **Apache Cassandra** | 4.1 (`cassandra:4.1`) | Single-node local StatefulSet |
 | **Apache Kafka** | Định hướng ban đầu: 3.7+ | Kết quả thực tế Kafka 3.9.1 trên Mac xem mục 4 |
-| **Apache HDFS** | Mục tiêu: 3.3+ (Hadoop) | Chưa xác minh; mục 5 còn là mẫu |
+| **Apache HDFS** | Chưa chọn image/phiên bản | Chưa có implementation hoặc test evidence |
 
 ---
 
@@ -161,9 +163,9 @@ $ kubectl exec -n fraudstream cassandra-0 -- cqlsh -e "SELECT transaction_id, de
 | Resource requests / limits | 250m CPU + 512 MiB / 1 CPU + 1536 MiB |
 | JVM heap | `-Xms256m -Xmx512m` |
 
-Phiên bản node 1.34.11 được truyền bằng `kind create cluster --image`
-theo deployment guide để khớp kubectl trên Mac. File Kind chung vẫn ghi
-1.29.2. Chưa đo CPU/RAM peak; requests/limits là cấu hình, không phải số đo.
+Phiên bản node 1.34.11 nay đã được pin trực tiếp trong file Kind chung để
+mọi thành viên dùng cùng chuẩn. Chưa đo CPU/RAM peak; requests/limits là cấu
+hình, không phải số đo.
 
 ### 4.2. Topic bootstrap và chạy lại
 
@@ -254,14 +256,14 @@ Script chung ở chế độ đầy đủ vẫn cần Cassandra/HDFS của Khôi
 Hai dịch vụ này chưa được triển khai/kiểm chứng trên cluster Mac của lần
 chạy Kafka này. Bản PowerShell đã nối vào cùng smoke test Python,
 nhưng chưa được chạy trên Windows trong lần kiểm thử này.
-Chạy script chung đầy đủ: phần Kafka PASS, toàn script exit 1 vì thiếu
-Cassandra; HDFS hiện báo WARN theo phần kiểm tra cũ:
+Từ bản hoàn thiện hiện tại, script chung đầy đủ sẽ exit 1 nếu thiếu
+Cassandra **hoặc** HDFS; không còn báo thành công có điều kiện:
 
 ```text
 [FAIL] Cassandra pod cassandra-0 not found in namespace fraudstream!
 [PASS] Kafka pod/PVC/topics and 100-event producer-consumer test passed.
-[WARN] HDFS NameNode not yet deployed
-STATUS: FAILED (1 checks failed)
+[FAIL] HDFS NameNode not deployed; full W2 verification cannot pass.
+STATUS: FAILED (2 checks failed)
 ```
 
 Kafka local dùng RF=1, PLAINTEXT nội bộ, chưa có listener cho laptop.
@@ -281,10 +283,16 @@ Chưa benchmark throughput, latency hay resource peak.
 
 ---
 
-## 5. Bằng chứng Kiểm thử HDFS (Mẫu cho Lê Trọng Đạt)
+## 5. Trạng thái Apache HDFS
 
-- **Pod status**: `hdfs-namenode-0` (Running), `hdfs-datanode-0` (Running).
-- **Data Lake layout**:
+Chưa có `infra/hdfs/`, do đó chưa có NameNode/DataNode, PVC, data-lake
+layout hay smoke test I/O. Khối bên dưới là mẫu bàn giao cũ, **không phải kết
+quả đã chạy** và không được dùng làm bằng chứng nghiệm thu. HDFS chỉ hoàn tất
+khi manifests được versioned và có upload/list/read/checksum cùng persistence
+test qua restart.
+
+- **Ví dụ trạng thái cần đạt (chưa chạy)**: `hdfs-namenode-0` (Running), `hdfs-datanode-0` (Running).
+- **Ví dụ layout cần đạt (chưa chạy)**:
   ```text
   $ hdfs dfs -ls /fraud-data
   drwxr-xr-x   - root supergroup          0 2026-10-18 15:00 /fraud-data/checkpoints
@@ -300,8 +308,8 @@ Chưa benchmark throughput, latency hay resource peak.
 
 ## 6. Mức Sử Dụng Tài Nguyên (Resource Footprint)
 
-Bảng dưới giữ cấu trúc tham khảo ban đầu. Các giá trị peak của Cassandra/HDFS
-chưa được đo lại trên Mac của Hoàng; HDFS vẫn chờ deliverable của Đạt.
+Các giá trị peak Cassandra chưa được đo lại trên Mac của Hoàng; HDFS chưa có
+deliverable để đo.
 Không coi bảng này là phép đo tổng tài nguyên end-to-end. Requests/PVC
 Kafka khớp cấu hình thực tế tại mục 4; peak Kafka chưa đo.
 
@@ -309,9 +317,9 @@ Kafka khớp cấu hình thực tế tại mục 4; peak Kafka chưa đo.
 |---|---|---|---|---|---|
 | `cassandra-0` | 300m | ~450m (lúc khởi động) | 1 Gi | ~920 MiB | 5 Gi |
 | `kafka-0` | 250m | Chưa đo | 512 Mi | Chưa đo | 5 Gi |
-| `hdfs-namenode-0` | 200m | ~250m | 512 Mi | ~480 MiB | 5 Gi |
-| `hdfs-datanode-0` | 200m | ~200m | 512 Mi | ~420 MiB | 5 Gi |
-| **Tổng cộng dự kiến** | **~950m** | **Chưa đo** | **~2.5 Gi** | **Chưa đo** | **20 Gi** |
+| `hdfs-namenode-0` | Chưa xác định | Chưa đo | Chưa xác định | Chưa đo | Chưa xác định |
+| `hdfs-datanode-0` | Chưa xác định | Chưa đo | Chưa xác định | Chưa đo | Chưa xác định |
+| **Tổng phần đã triển khai (Kafka + Cassandra)** | **550m** | **Chưa đo** | **1.5 Gi** | **Chưa đo** | **10 Gi** |
 
 JVM heap giới hạn để phù hợp local. Cần đo CPU/RAM thực tế khi cả ba
 dịch vụ đã được triển khai trước khi kết luận tổng footprint.
@@ -320,6 +328,6 @@ dịch vụ đã được triển khai trước khi kết luận tổng footprin
 
 ## 7. Giới hạn Môi trường Local (Known Limitations)
 
-1. **Replication Factor = 1**: Toàn bộ hệ thống (Cassandra, Kafka, HDFS) đều chạy 1 replica/broker/datanode để tiết kiệm RAM cho máy tính cá nhân. Trong môi trường production, replication factor tối thiểu phải là 3.
+1. **Replication Factor = 1**: Cassandra và Kafka hiện chạy một node để tiết kiệm RAM cho máy tính cá nhân. Trong môi trường production, replication factor tối thiểu phải là 3.
 2. **SimpleStrategy Keyspace**: Cassandra sử dụng `SimpleStrategy` cho single datacenter cục bộ. Khi lên cụm cloud đa zone, sẽ chuyển sang `NetworkTopologyStrategy`.
 3. **StorageClass Local-path**: Kind sử dụng volume host-path từ Docker container của control-plane, do đó nếu xóa Kind cluster (`kind delete cluster`), dữ liệu PVC sẽ bị xóa theo. Dữ liệu chỉ được đảm bảo tồn tại qua các lần restart pod trong cùng một cluster.

@@ -60,7 +60,7 @@ fi
 if kubectl get pods -n kube-system -l k8s-app=kube-dns --no-headers 2>/dev/null | grep -q "Running"; then
     log_pass "CoreDNS service is Running."
 else
-    log_warn "CoreDNS pods not in Running state."
+    log_fail "CoreDNS pods are not in Running state."
 fi
 
 # Check PVCs in fraudstream
@@ -96,7 +96,7 @@ if kubectl get pod cassandra-0 -n "${NAMESPACE}" >/dev/null 2>&1; then
         if echo "${KEYSPACE_CHECK}" | grep -q "fraudstream"; then
             log_pass "Keyspace 'fraudstream' exists and is accessible."
         else
-            log_warn "Keyspace 'fraudstream' not initialized. Run smoke-test or bootstrap script."
+            log_fail "Keyspace 'fraudstream' is not initialized. Run the Cassandra smoke test."
         fi
 
         # Check Smoke Test Query without ALLOW FILTERING
@@ -104,7 +104,7 @@ if kubectl get pod cassandra-0 -n "${NAMESPACE}" >/dev/null 2>&1; then
         if echo "${QUERY_TEST}" | grep -q "count"; then
             log_pass "CQL query execution passed without ALLOW FILTERING."
         else
-            log_warn "CQL query verification skipped or failed."
+            log_fail "CQL query verification failed. Run the Cassandra smoke test."
         fi
     else
         log_fail "Cassandra pod cassandra-0 is in status: ${POD_STATUS}"
@@ -144,14 +144,14 @@ if [[ -n "${NAMENODE_POD}" ]]; then
             if echo "${HDFS_DIRS}" | grep -q "${p}"; then
                 log_pass "HDFS path exists: ${p}"
             else
-                log_warn "HDFS path missing or not yet created: ${p}"
+                log_fail "Required HDFS path is missing: ${p}"
             fi
         done
     else
         log_fail "HDFS NameNode pod is in state ${NN_STATUS}"
     fi
 else
-    log_warn "HDFS NameNode not yet deployed (Waiting for Đạt's deliverable: infra/hdfs/)"
+    log_fail "HDFS NameNode not deployed; full W2 verification cannot pass."
 fi
 
 # ------------------------------------------------------------------

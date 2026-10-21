@@ -1,6 +1,10 @@
 # Hướng dẫn Triển khai Hạ tầng Nền tảng Tuần 2 (FraudStream)
 
-Tài liệu hướng dẫn triển khai môi trường Kubernetes local, cài đặt và kiểm thử bộ ba hạ tầng **Cassandra, Kafka, HDFS** trong namespace `fraudstream`.
+Tài liệu hướng dẫn triển khai môi trường Kubernetes local và các phần hạ tầng
+Tuần 2 trong namespace `fraudstream`. Hiện có thể triển khai/kiểm thử
+**Cassandra** và **Kafka**; **HDFS chưa có deliverable** nên không mô tả như
+một dịch vụ đã sẵn sàng. Trạng thái nghiệm thu chung nằm tại
+[`week_2_target.md`](week_2_target.md).
 
 ---
 
@@ -99,18 +103,16 @@ kubectl cluster-info --context kind-fraudstream-cluster
 kubectl get nodes
 ```
 
-**Môi trường Mac của Hoàng:** Kind 0.33.0, kubectl 1.34.1. Tạo cluster
-Kubernetes 1.34.11 bằng cách ghi đè image cho lần chạy này (file cấu hình
-chung vẫn giữ 1.29.2):
+**Chuẩn môi trường hiện tại:** file cấu hình đã pin Kubernetes 1.34.11 để
+khớp lần kiểm thử Kafka. Dùng một lệnh duy nhất dưới đây:
 
 ```bash
 kind create cluster --config infra/kind/kind-cluster.yaml \
-  --image kindest/node:v1.34.11@sha256:44e222ee2132dab25ff87301682f89eb82c7880ea3a1bf543bfe9708fd08d67d \
   --wait 5m
 ```
 
-Chọn một lệnh tạo cluster phù hợp môi trường; không chạy cả hai để tạo
-cùng tên cluster. kubectl nên chênh tối đa một minor version với Kubernetes.
+Chỉ chạy một lệnh tạo cluster phù hợp shell đang dùng. `kubectl` nên chênh
+tối đa một minor version với Kubernetes.
 
 ### Bước 3.2: Khởi tạo Namespace & Resource Quota
 ```bash
@@ -132,7 +134,7 @@ bash infra/scripts/check_preflight.sh
 
 ## 4. Triển khai Apache Cassandra (Lê Xuân Nhật Khôi)
 
-### Bước 4.1: Áp dụng Cấu hình & Secret
+### Bước 4.1: Áp dụng ConfigMap
 ```bash
 kubectl apply -f infra/cassandra/cassandra-config.yaml
 kubectl apply -f infra/cassandra/cassandra-service.yaml
@@ -251,18 +253,12 @@ liệu cũ. Bootstrap dừng nếu topic có sẵn nhưng sai cấu hình; khôn
 
 ## 6. Triển khai Apache HDFS (Lê Trọng Đạt)
 
-1. Triển khai NameNode, DataNode và Service trong namespace `fraudstream`.
-2. Khởi tạo cây thư mục Data Lake:
-   ```bash
-   kubectl exec -n fraudstream hdfs-namenode-0 -- hdfs dfs -mkdir -p \
-     /fraud-data/raw \
-     /fraud-data/cleaned \
-     /fraud-data/curated \
-     /fraud-data/late_events \
-     /fraud-data/checkpoints \
-     /fraud-data/models
-   ```
-3. Chạy HDFS smoke test: tải file kiểm thử lên `/fraud-data/raw`, `hdfs dfs -ls` và kiểm tra checksum.
+HDFS chưa được triển khai trong repository. Vì vậy không chạy verifier đầy đủ
+và không coi Tuần 2 đã hoàn thành chỉ với Kafka/Cassandra. Khi có
+`infra/hdfs/`, phần này phải được bổ sung bằng manifests NameNode/DataNode,
+PVC, sáu thư mục data lake, smoke test upload/list/read/checksum và persistence
+test. Verifier chung đã sẵn sàng kiểm tra NameNode và sáu đường dẫn đó, nhưng
+sẽ trả exit code 1 cho đến khi deliverable HDFS tồn tại và hoạt động.
 
 ---
 

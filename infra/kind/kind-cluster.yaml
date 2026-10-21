@@ -7,15 +7,7 @@ networking:
   apiServerPort: 6443
 nodes:
   - role: control-plane
-    image: kindest/node:v1.29.2
-    extraPortMappings:
-      # Port mapping for host access if needed (NodePort or direct forward)
-      - containerPort: 30092
-        hostPort: 9042
-        protocol: TCP
-      - containerPort: 30093
-        hostPort: 9092
-        protocol: TCP
-      - containerPort: 30098
-        hostPort: 9870
-        protocol: TCP
+    # Phiên bản đã dùng trong kiểm thử W2; giữ pin để mọi thành viên tạo
+    # cùng một Kubernetes version. Kafka/Cassandra chỉ mở ClusterIP, vì vậy
+    # host access dùng `kubectl port-forward` khi cần, không dùng port mapping.
+    image: kindest/node:v1.34.11@sha256:44e222ee2132dab25ff87301682f89eb82c7880ea3a1bf543bfe9708fd08d67d

@@ -52,7 +52,10 @@ OUTPUT=$(kubectl exec -i -n "${NAMESPACE}" "${POD_NAME}" -- cqlsh < "${CQL_DIR}/
 echo "${OUTPUT}"
 
 # Verify expected values in output
-if echo "${OUTPUT}" | grep -q "tx_smoke_20261018_0001" && echo "${OUTPUT}" | grep -q "BLOCK"; then
+if echo "${OUTPUT}" | grep -q "tx_smoke_20261018_0001" \
+    && echo "${OUTPUT}" | grep -q "tx_smoke_20261018_0002" \
+    && echo "${OUTPUT}" | grep -q "APPROVE" \
+    && echo "${OUTPUT}" | grep -q "BLOCK"; then
     echo ">>> Smoke Test Query Check: PASS (Found expected transactions and decisions without ALLOW FILTERING)"
 else
     echo ">>> Smoke Test Query Check: FAIL (Missing expected records in CQL output)"

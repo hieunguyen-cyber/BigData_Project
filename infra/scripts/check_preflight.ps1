@@ -46,13 +46,11 @@ if ($LASTEXITCODE -eq 0) {
 
 # 4. StorageClass Check
 Write-Host -NoNewline "[4/6] Checking StorageClass... "
-$sc = kubectl get storageclass -o jsonpath='{.items[*].metadata.name}' 2>&1
-if ($sc -match "standard") {
-    Write-Host "OK (Default StorageClass 'standard' found)" -ForegroundColor Green
-} elseif ($sc.Length -gt 0) {
-    Write-Host "OK (StorageClasses found: $sc)" -ForegroundColor Green
+$sc = kubectl get storageclass standard 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "OK (StorageClass 'standard' is available)" -ForegroundColor Green
 } else {
-    Write-Host "FAILED! (No StorageClass found)" -ForegroundColor Red
+    Write-Host "FAILED! (StorageClass 'standard' is required by the W2 StatefulSets)" -ForegroundColor Red
     exit 1
 }
 
@@ -83,15 +81,46 @@ spec:
 "@
 
 $testPvcYaml | kubectl apply -f - | Out-Null
-Start-Sleep -Seconds 3
+$testPodYaml = @"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: preflight-volume-consumer
+  namespace: fraudstream
+spec:
+  restartPolicy: Never
+  containers:
+    - name: consumer
+      image: busybox:1.36
+      command: ["sh", "-c", "echo fraudstream > /data/ready && sleep 20"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: preflight-test-pvc
+"@
+$testPodYaml | kubectl apply -f - | Out-Null
+kubectl wait -n fraudstream --for=condition=Ready pod/preflight-volume-consumer --timeout=90s 2>&1 | Out-Null
+$ready = $LASTEXITCODE -eq 0
 $pvcPhase = kubectl get pvc preflight-test-pvc -n fraudstream -o jsonpath='{.status.phase}' 2>&1
-kubectl delete pvc preflight-test-pvc -n fraudstream 2>&1 | Out-Null
+kubectl exec -n fraudstream preflight-volume-consumer -- test -f /data/ready 2>&1 | Out-Null
+$mounted = $LASTEXITCODE -eq 0
 
-if ($pvcPhase -match "Bound" -or $pvcPhase -match "Pending") {
-    Write-Host "OK (PVC provisioner responds correctly: $pvcPhase)" -ForegroundColor Green
+if ($ready -and $pvcPhase -eq "Bound" -and $mounted) {
+    Write-Host "OK (PVC is Bound and can be mounted/read-written)" -ForegroundColor Green
 } else {
-    Write-Host "WARNING (PVC phase: $pvcPhase)" -ForegroundColor Yellow
+    Write-Host "FAILED! (PVC provisioning or mount test failed)" -ForegroundColor Red
+    kubectl describe pvc preflight-test-pvc -n fraudstream
+    kubectl describe pod preflight-volume-consumer -n fraudstream
+    kubectl delete pod preflight-volume-consumer -n fraudstream --ignore-not-found 2>&1 | Out-Null
+    kubectl delete pvc preflight-test-pvc -n fraudstream --ignore-not-found 2>&1 | Out-Null
+    exit 1
 }
+
+kubectl delete pod preflight-volume-consumer -n fraudstream --ignore-not-found 2>&1 | Out-Null
+kubectl delete pvc preflight-test-pvc -n fraudstream --ignore-not-found 2>&1 | Out-Null
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host " Preflight Check PASSED! Cluster is ready for workloads." -ForegroundColor Green

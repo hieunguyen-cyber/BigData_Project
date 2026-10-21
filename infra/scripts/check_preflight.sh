@@ -43,15 +43,10 @@ fi
 
 # 4. StorageClass Check
 echo -n "[4/6] Checking StorageClass... "
-DEFAULT_SC=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || true)
-if [[ -z "${DEFAULT_SC}" ]]; then
-    DEFAULT_SC=$(kubectl get storageclass -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-fi
-
-if [[ -n "${DEFAULT_SC}" ]]; then
-    echo "OK (Default StorageClass: ${DEFAULT_SC})"
+if kubectl get storageclass standard >/dev/null 2>&1; then
+    echo "OK (StorageClass 'standard' is available)"
 else
-    echo "FAILED! (No StorageClass found in cluster. Kind hostpath provisioner might not be ready)"
+    echo "FAILED! (StorageClass 'standard' is required by the W2 StatefulSets)"
     exit 1
 fi
 
@@ -80,17 +75,42 @@ spec:
       storage: 10Mi
 EOF
 
-# Give provisioner a moment to bind
-sleep 3
-PVC_PHASE=$(kubectl get pvc preflight-test-pvc -n fraudstream -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
-kubectl delete pvc preflight-test-pvc -n fraudstream >/dev/null 2>&1 || true
+cat <<EOF | kubectl apply -f - >/dev/null
+apiVersion: v1
+kind: Pod
+metadata:
+  name: preflight-volume-consumer
+  namespace: fraudstream
+spec:
+  restartPolicy: Never
+  containers:
+    - name: consumer
+      image: busybox:1.36
+      command: ["sh", "-c", "echo fraudstream > /data/ready && sleep 20"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: preflight-test-pvc
+EOF
 
-if [[ "${PVC_PHASE}" == "Bound" || "${PVC_PHASE}" == "Pending" ]]; then
-    # In Kind/hostpath, some storage provisioners bind on first pod mount (WaitForFirstConsumer) or bind immediately
-    echo "OK (PVC provisioner responds correctly: ${PVC_PHASE})"
+if kubectl wait -n fraudstream --for=condition=Ready pod/preflight-volume-consumer --timeout=90s >/dev/null 2>&1 && \
+   [[ "$(kubectl get pvc preflight-test-pvc -n fraudstream -o jsonpath='{.status.phase}')" == "Bound" ]] && \
+   kubectl exec -n fraudstream preflight-volume-consumer -- test -f /data/ready; then
+    echo "OK (PVC is Bound and can be mounted/read-written)"
 else
-    echo "WARNING (PVC phase: ${PVC_PHASE})"
+    echo "FAILED! (PVC provisioning or mount test failed)"
+    kubectl describe pvc preflight-test-pvc -n fraudstream || true
+    kubectl describe pod preflight-volume-consumer -n fraudstream || true
+    kubectl delete pod preflight-volume-consumer -n fraudstream --ignore-not-found >/dev/null 2>&1 || true
+    kubectl delete pvc preflight-test-pvc -n fraudstream --ignore-not-found >/dev/null 2>&1 || true
+    exit 1
 fi
+
+kubectl delete pod preflight-volume-consumer -n fraudstream --ignore-not-found >/dev/null 2>&1 || true
+kubectl delete pvc preflight-test-pvc -n fraudstream --ignore-not-found >/dev/null 2>&1 || true
 
 echo "============================================================"
 echo " Preflight Check PASSED! Cluster is ready for workloads."

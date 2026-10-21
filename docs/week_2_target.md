@@ -16,6 +16,36 @@ Kết thúc tuần, dự án có một môi trường Kubernetes tái lập đư
 | W2-05 | Tích hợp hạ tầng | `verify_infra.sh` | Service DNS, pods, PVC và từng service đều healthy |
 | W2-06 | Tài liệu vận hành | Review docs + chạy lại từ máy khác | Có deploy, verify, teardown và troubleshooting cơ bản |
 
+## 1.1. Trạng thái thực hiện hiện tại
+
+Trạng thái dưới đây chỉ đánh dấu các kết quả đã có manifest/script và bằng
+chứng kiểm thử tương ứng. `Chưa hoàn tất` không được hiểu là pass có điều
+kiện: script xác minh đầy đủ phải trả lỗi cho đến khi hạng mục đó hoàn thành.
+
+| Mã | Trạng thái | Phần đã hoàn thiện | Bằng chứng / nơi xem |
+|---|---|---|---|
+| W2-01 | Hoàn thành | Kind config đã pin Kubernetes 1.34.11; namespace, quota/limit và preflight kiểm tra node, DNS, StorageClass, PVC mount/read-write. | `infra/kind/`, `infra/platform/`, `infra/scripts/check_preflight.*` |
+| W2-02 | Hoàn thành | Kafka KRaft một broker, PVC 5 GiB, 4 topics, bootstrap idempotent, health probes và smoke test 100 events/persistence. | `infra/kafka/`, mục 4 của `week_2_test_evidence.md` |
+| W2-03 | Chưa hoàn tất | Chưa có manifest HDFS, PVC, data-lake layout hay smoke test I/O. | Sẽ thuộc `infra/hdfs/` |
+| W2-04 | Hoàn thành | Cassandra StatefulSet, PVC 5 GiB, Service nội bộ, probes, CQL bootstrap và smoke test insert/select/persistence. | `infra/cassandra/`, mục 3 của `week_2_test_evidence.md` |
+| W2-05 | Chưa hoàn tất | Verifier Bash/PowerShell đã kiểm tra nghiêm ngặt platform, Cassandra, Kafka và sẽ fail khi thiếu HDFS/path bắt buộc. Chưa thể pass toàn bộ do W2-03. | `infra/scripts/verify_infra.*` |
+| W2-06 | Đang hoàn thiện | Đã có deploy, verify, teardown, troubleshooting và evidence; chưa có review chéo/dựng lại đầy đủ từ một thành viên khác. | `docs/week_2_deployment.md`, `docs/week_2_test_evidence.md` |
+
+### Các cải tiến đã áp dụng cho phần đã có
+
+1. Chuẩn hóa Kind về image đã được dùng trong kiểm thử (`v1.34.11`) và bỏ
+   port mapping không được Service sử dụng; truy cập từ máy host dùng
+   `kubectl port-forward` khi cần.
+2. Preflight không còn chấp nhận PVC `Pending` như một kết quả pass. Nó tạo
+   pod tạm, kiểm tra PVC `Bound`, mount và đọc/ghi file trước khi dọn dẹp.
+3. Verifier đầy đủ không còn chỉ cảnh báo đối với CoreDNS, schema Cassandra,
+   NameNode hay các thư mục HDFS bắt buộc. Mỗi lỗi này làm lệnh trả exit code 1.
+4. Xóa Secret Cassandra mẫu có mật khẩu hard-code nhưng không được workload
+   sử dụng. Cassandra local hiện chưa bật authentication; khi bật ở giai đoạn
+   sau phải tạo Secret ngoài repository hoặc từ secret manager.
+5. Smoke test Cassandra xác minh đủ hai transaction mẫu cùng hai quyết định
+   `APPROVE` và `BLOCK`, thay vì chỉ kiểm tra một ID và một chuỗi quyết định.
+
 ## 2. Phạm vi hạ tầng
 
 ```mermaid
@@ -179,15 +209,15 @@ Khôi đảm nhiệm hai lớp có quan hệ chặt chẽ: platform setup là đ
 
 ## 8. Checklist nghiệm thu
 
-- [ ] Có một cluster local chuẩn và namespace `fraudstream`.
-- [ ] Kafka có bốn topics; consumer đọc 100 events hợp schema và đúng key.
-- [ ] Kafka topic bootstrap chạy lặp lại an toàn.
+- [x] Có một cluster local chuẩn và namespace `fraudstream`.
+- [x] Kafka có bốn topics; consumer đọc 100 events hợp schema và đúng key.
+- [x] Kafka topic bootstrap chạy lặp lại an toàn.
 - [ ] HDFS có PVC và đủ layout `raw/cleaned/curated/late_events/checkpoints/models`.
 - [ ] HDFS upload/list/read/checksum smoke test thành công.
-- [ ] Cassandra dùng PVC, service DNS, readiness/liveness probes.
-- [ ] Keyspace/bảng CQL phục vụ query theo thẻ + thời gian; sample insert/select thành công.
+- [x] Cassandra dùng PVC, service DNS, readiness/liveness probes.
+- [x] Keyspace/bảng CQL phục vụ query theo thẻ + thời gian; sample insert/select thành công.
 - [ ] `verify_infra.sh` kiểm tra cluster, pods, PVC, Kafka, HDFS và Cassandra.
-- [ ] Tài liệu có deploy, verify, teardown, known limitations và troubleshooting cơ bản.
+- [x] Tài liệu có deploy, verify, teardown, known limitations và troubleshooting cơ bản.
 - [ ] Hoàng, Đạt, Khôi review chéo manifests/scripts trước khi merge.
 
 ## 9. Definition of Done

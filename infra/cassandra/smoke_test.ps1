@@ -64,7 +64,10 @@ $smokeCql = Join-Path $CqlDir "02-smoke-test.cql"
 $cqlOutput = Get-Content -Raw $smokeCql | kubectl exec -i -n $Namespace $PodName -- cqlsh
 Write-Host $cqlOutput
 
-if ($cqlOutput -match "tx_smoke_20261018_0001" -and $cqlOutput -match "BLOCK") {
+if ($cqlOutput -match "tx_smoke_20261018_0001" -and
+    $cqlOutput -match "tx_smoke_20261018_0002" -and
+    $cqlOutput -match "APPROVE" -and
+    $cqlOutput -match "BLOCK") {
     Write-Host ">>> Smoke Test Query Check: PASS (Found expected transactions and decisions without ALLOW FILTERING)" -ForegroundColor Green
 } else {
     Write-Error ">>> Smoke Test Query Check: FAIL (Missing expected records in CQL output)"
