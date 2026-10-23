@@ -1,0 +1,49 @@
+{
+  "fixture_name": "fraudstream_batch_quality_v1",
+  "fixture_version": "1.0.0",
+  "contract": "docs/data_dictionary.md#transaction-event-v1",
+  "created_for": "Week 3 - Phạm Trung Hiếu / Batch Data-quality Foundation",
+  "synthetic_only": true,
+  "contains_real_dataset_or_pii": false,
+  "input_file": "transactions.jsonl",
+  "encoding": "UTF-8",
+  "format": "JSONL; one transaction event v1 JSON object per line",
+  "line_count": 4,
+  "reference_processing_time_utc": "2026-10-04T10:00:00Z",
+  "watermark_minutes": 10,
+  "arrival_order_is_significant": true,
+  "expected_classification_counts": {
+    "input": 4,
+    "valid": 1,
+    "invalid": 1,
+    "duplicate": 1,
+    "late": 1
+  },
+  "cases": [
+    {
+      "line": 1,
+      "case": "valid",
+      "transaction_id": "tx_fixture_valid_001",
+      "reason": "All 12 required fields and constraints are valid."
+    },
+    {
+      "line": 2,
+      "case": "invalid",
+      "transaction_id": "tx_fixture_invalid_001",
+      "reason": "DQ-02: amount is negative (must be > 0)."
+    },
+    {
+      "line": 3,
+      "case": "duplicate",
+      "transaction_id": "tx_fixture_valid_001",
+      "reason": "Repeats transaction_id from line 1; DQ-08."
+    },
+    {
+      "line": 4,
+      "case": "late",
+      "transaction_id": "tx_fixture_late_001",
+      "reason": "Event time is 20 minutes before the current max event time (09:00Z); beyond the 10-minute watermark."
+    }
+  ],
+  "reproducibility": "The fixture bytes and expected results are version-controlled; use the explicit reference processing time and preserve line/arrival order for this test."
+}
