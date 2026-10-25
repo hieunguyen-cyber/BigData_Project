@@ -1,0 +1,144 @@
+# Owner: Lê Trọng Đạt — W2-03 / W3-01
+# HDFS DataNode: Headless Service và StatefulSet
+# Namespace: fraudstream
+#
+# PHẢI apply AFTER hdfs-namenode.yaml vì:
+#   1. DataNode cần ConfigMap hdfs-config (định nghĩa trong hdfs-namenode.yaml)
+#   2. DataNode cần NameNode khởi động trước để đăng ký
+#
+# Quyết định thiết kế:
+#   - Image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+#     Khớp phiên bản với NameNode image (Hadoop 3.2.1).
+#   - StatefulSet (không phải Deployment): cần PVC ổn định, tên pod cố định
+#     (hdfs-datanode-0) để NameNode nhận dạng nhất quán qua restart.
+#   - PVC (không dùng emptyDir): blocks dữ liệu HDFS tồn tại qua restart.
+#   - Headless Service: DNS ổn định cho StatefulSet pod.
+#     PHẢI được định nghĩa TRƯỚC StatefulSet trong file này vì StatefulSet
+#     tham chiếu serviceName.
+#   - Không cần initContainer: DataNode không cần format trước khi start.
+#     Entrypoint bde2020 tự khởi động datanode daemon và đăng ký với NameNode.
+
+---
+# Service Headless: DNS ổn định cho StatefulSet DataNode.
+# PHẢI đứng trước StatefulSet vì StatefulSet tham chiếu serviceName này.
+apiVersion: v1
+kind: Service
+metadata:
+  name: hdfs-datanode-headless
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: hdfs-datanode
+    app.kubernetes.io/part-of: fraudstream
+    app.kubernetes.io/component: datanode
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/component: datanode
+  ports:
+    - name: data
+      port: 9866
+      targetPort: 9866
+    - name: ipc
+      port: 9867
+      targetPort: 9867
+    - name: web
+      port: 9864
+      targetPort: 9864
+
+---
+# StatefulSet: HDFS DataNode
+# Một DataNode cho local demo — RF=1 (đã khai báo trong hdfs-config ConfigMap).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hdfs-datanode
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: hdfs-datanode
+    app.kubernetes.io/part-of: fraudstream
+    app.kubernetes.io/component: datanode
+spec:
+  serviceName: hdfs-datanode-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: datanode
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hdfs-datanode
+        app.kubernetes.io/part-of: fraudstream
+        app.kubernetes.io/component: datanode
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      # DataNode cần NameNode đã sẵn sàng trước khi đăng ký.
+      # initContainers không cần thiết vì entrypoint bde2020 DataNode tự
+      # retry kết nối đến NameNode. Tuy nhiên, nên deploy NameNode trước.
+      containers:
+        - name: datanode
+          image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            # Tham chiếu ConfigMap chung — định nghĩa trong hdfs-namenode.yaml.
+            # CORE_CONF_fs_defaultFS trỏ đến DNS của NameNode service.
+            - configMapRef:
+                name: hdfs-config
+          ports:
+            - name: data
+              containerPort: 9866
+            - name: ipc
+              containerPort: 9867
+            - name: web
+              containerPort: 9864
+          resources:
+            requests:
+              cpu: 300m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1280Mi
+          # startupProbe: cho DataNode đủ thời gian kết nối NameNode và đăng ký
+          startupProbe:
+            tcpSocket:
+              port: 9866
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 30
+          # readinessProbe: HTTP check trên Web UI DataNode (port 9864)
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9864
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          # livenessProbe: TCP check trên data transfer port
+          livenessProbe:
+            tcpSocket:
+              port: 9866
+            initialDelaySeconds: 90
+            periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:
+            # PHẢI dùng PVC, không dùng emptyDir.
+            # /hadoop/dfs/data chứa toàn bộ blocks dữ liệu HDFS.
+            # Mất thư mục này = mất dữ liệu trong HDFS.
+            - name: hdfs-datanode-data
+              mountPath: /hadoop/dfs/data
+
+  # PVC template: tạo tự động cho hdfs-datanode-0.
+  # 8Gi: lớn hơn NameNode PVC vì lưu dữ liệu thực tế (raw, cleaned, curated).
+  volumeClaimTemplates:
+    - metadata:
+        name: hdfs-datanode-data
+        labels:
+          app.kubernetes.io/name: hdfs-datanode
+          app.kubernetes.io/part-of: fraudstream
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 8Gi
