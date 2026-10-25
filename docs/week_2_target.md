@@ -26,10 +26,10 @@ kiện: script xác minh đầy đủ phải trả lỗi cho đến khi hạng m
 |---|---|---|---|
 | W2-01 | Hoàn thành | Kind config đã pin Kubernetes 1.34.11; namespace, quota/limit và preflight kiểm tra node, DNS, StorageClass, PVC mount/read-write. | `infra/kind/`, `infra/platform/`, `infra/scripts/check_preflight.*` |
 | W2-02 | Hoàn thành | Kafka KRaft một broker, PVC 5 GiB, 4 topics, bootstrap idempotent, health probes và smoke test 100 events/persistence. | `infra/kafka/`, mục 4 của `week_2_test_evidence.md` |
-| W2-03 | Chưa hoàn tất | Chưa có manifest HDFS, PVC, data-lake layout hay smoke test I/O. | Sẽ thuộc `infra/hdfs/` |
+| W2-03 | Hoàn thành | NameNode/DataNode Ready; hai PVC 5 GiB/8 GiB Bound; bootstrap tạo 6 paths; JSONL I/O/SHA-256 và persistence qua NameNode recreate đều PASS trên Kind. | `infra/hdfs/`, mục 5 `week_2_test_evidence.md` |
 | W2-04 | Hoàn thành | Cassandra StatefulSet, PVC 5 GiB, Service nội bộ, probes, CQL bootstrap và smoke test insert/select/persistence. | `infra/cassandra/`, mục 3 của `week_2_test_evidence.md` |
-| W2-05 | Chưa hoàn tất | Verifier Bash/PowerShell đã kiểm tra nghiêm ngặt platform, Cassandra, Kafka và sẽ fail khi thiếu HDFS/path bắt buộc. Chưa thể pass toàn bộ do W2-03. | `infra/scripts/verify_infra.*` |
-| W2-06 | Đang hoàn thiện | Đã có deploy, verify, teardown, troubleshooting và evidence; chưa có review chéo/dựng lại đầy đủ từ một thành viên khác. | `docs/week_2_deployment.md`, `docs/week_2_test_evidence.md` |
+| W2-05 | Hoàn thành | Bash và PowerShell verifier đã chạy trên cluster Kind có đủ 4 workload; kiểm tra platform, Cassandra, Kafka, NameNode/DataNode, 2 HDFS PVC, 6 paths và HDFS I/O đều PASS. | `infra/scripts/verify_infra.*`, mục 5 evidence |
+| W2-06 | Hoàn thành | Có deploy, verify, teardown, troubleshooting, Makefile tái lập và review chéo kỹ thuật có evidence runtime cập nhật 25/10/2026. Review/acknowledge nội bộ của các owner vẫn là hoạt động nhóm tiếp theo. | `docs/week_2_deployment.md`, `docs/week_2_test_evidence.md`, `docs/week_2_cross_review.md`, `Makefile` |
 
 ### Các cải tiến đã áp dụng cho phần đã có
 
@@ -45,6 +45,12 @@ kiện: script xác minh đầy đủ phải trả lỗi cho đến khi hạng m
    sau phải tạo Secret ngoài repository hoặc từ secret manager.
 5. Smoke test Cassandra xác minh đủ hai transaction mẫu cùng hai quyết định
    `APPROVE` và `BLOCK`, thay vì chỉ kiểm tra một ID và một chuỗi quyết định.
+6. Bootstrap HDFS dừng với lỗi nếu DataNode chưa đăng ký; không còn tạo layout
+   khi filesystem chưa thể lưu block. Full verifier cũng kiểm tra DataNode, cả
+   hai PVC và round-trip I/O/checksum, thay vì chỉ kiểm tra NameNode/path.
+7. Sửa Cassandra liveness probe: mở rộng đúng `POD_IP` trong shell thay vì tìm
+   chuỗi literal. Sau rollout runtime, Cassandra giữ `Ready` với restart count
+   bằng 0 khi liveness probe bắt đầu chạy.
 
 ## 2. Phạm vi hạ tầng
 
@@ -212,11 +218,11 @@ Khôi đảm nhiệm hai lớp có quan hệ chặt chẽ: platform setup là đ
 - [x] Có một cluster local chuẩn và namespace `fraudstream`.
 - [x] Kafka có bốn topics; consumer đọc 100 events hợp schema và đúng key.
 - [x] Kafka topic bootstrap chạy lặp lại an toàn.
-- [ ] HDFS có PVC và đủ layout `raw/cleaned/curated/late_events/checkpoints/models`.
-- [ ] HDFS upload/list/read/checksum smoke test thành công.
+- [x] HDFS có PVC và đủ layout `raw/cleaned/curated/late_events/checkpoints/models`.
+- [x] HDFS upload/list/read/checksum smoke test thành công, gồm persistence qua NameNode recreate.
 - [x] Cassandra dùng PVC, service DNS, readiness/liveness probes.
 - [x] Keyspace/bảng CQL phục vụ query theo thẻ + thời gian; sample insert/select thành công.
-- [ ] `verify_infra.sh` kiểm tra cluster, pods, PVC, Kafka, HDFS và Cassandra.
+- [x] `verify_infra.sh` và `verify_infra.ps1` kiểm tra cluster, pods, PVC, Kafka, HDFS và Cassandra.
 - [x] Tài liệu có deploy, verify, teardown, known limitations và troubleshooting cơ bản.
 - [ ] Hoàng, Đạt, Khôi review chéo manifests/scripts trước khi merge.
 

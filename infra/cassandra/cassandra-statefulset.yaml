@@ -64,7 +64,10 @@ spec:
               command:
                 - /bin/bash
                 - -c
-                - "nodetool status | grep -E '^UN\\s+${POD_IP}'"
+                # POD_IP must be expanded by the shell.  Single quotes would
+                # make grep search the literal string "${POD_IP}", causing a
+                # healthy single-node Cassandra pod to be restarted by kubelet.
+                - 'nodetool status | grep -E "^UN\\s+${POD_IP}"'
             initialDelaySeconds: 60
             periodSeconds: 15
             timeoutSeconds: 5

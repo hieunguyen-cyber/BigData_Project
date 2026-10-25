@@ -6,25 +6,25 @@
 
 Kết thúc tuần, dự án có một thiết kế thống nhất và một dòng giao dịch mẫu có thể tái lập. Hai thành viên phụ trách phải cung cấp đủ đầu vào kỹ thuật để các giai đoạn hạ tầng, batch processing, ML training và streaming processing được triển khai ở các tuần tiếp theo.
 
-| Mã | Mục tiêu | Cách đánh giá | Mức chất lượng yêu cầu |
-|---|---|---|---|
-| W1-01 | Phân tích bài toán và kiến trúc | Review tài liệu + sơ đồ | Nêu rõ fraud scenarios, luồng Lambda và vai trò từng thành phần |
-| W1-02 | Chuẩn hóa data contract | Review schema + data dictionary | Có kiểu dữ liệu, tính bắt buộc, ví dụ và validation rules cho từng trường |
-| W1-03 | Khám phá dữ liệu | Review EDA report/notebook | Có tỷ lệ fraud, missing/duplicate analysis và tối thiểu 4 biểu đồ có nhận xét |
-| W1-04 | Fraud simulator | Chạy producer với sample events | Có normal traffic và 4 fraud patterns; event tuân thủ schema |
-| W1-05 | Data-quality rules | Chạy test dữ liệu đầu vào | Phân biệt valid, invalid, duplicate và late event rõ ràng |
-| W1-06 | Kế hoạch công việc | Review task checklist | Mỗi deliverable có owner, tiêu chí hoàn thành và bằng chứng review |
+| Mã   | Mục tiêu                             | Cách đánh giá                 | Mức chất lượng yêu cầu                                                              |
+| ----- | -------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------- |
+| W1-01 | Phân tích bài toán và kiến trúc | Review tài liệu + sơ đồ      | Nêu rõ fraud scenarios, luồng Lambda và vai trò từng thành phần                   |
+| W1-02 | Chuẩn hóa data contract              | Review schema + data dictionary   | Có kiểu dữ liệu, tính bắt buộc, ví dụ và validation rules cho từng trường    |
+| W1-03 | Khám phá dữ liệu                   | Review EDA report/notebook        | Có tỷ lệ fraud, missing/duplicate analysis và tối thiểu 4 biểu đồ có nhận xét |
+| W1-04 | Fraud simulator                        | Chạy producer với sample events | Có normal traffic và 4 fraud patterns; event tuân thủ schema                          |
+| W1-05 | Data-quality rules                     | Chạy test dữ liệu đầu vào   | Phân biệt valid, invalid, duplicate và late event rõ ràng                            |
+| W1-06 | Kế hoạch công việc                 | Review task checklist             | Mỗi deliverable có owner, tiêu chí hoàn thành và bằng chứng review               |
 
 ## 2. Deliverables cuối tuần
 
-| Deliverable | Nội dung tối thiểu | Owner |
-|---|---|---|
-| `docs/problem_and_architecture.md` | Bài toán, scope, fraud scenarios, sơ đồ Lambda | Nguyễn Trung Hiếu |
-| `docs/data_dictionary.md` | JSON schema, field definitions, constraints, validation rules | Nguyễn Trung Hiếu |
-| `docs/eda_report.md` hoặc notebook | EDA ULB/IEEE-CIS, biểu đồ, nhận xét và feature candidates | Phạm Trung Hiếu |
-| `docs/feature_v1.md` | Danh sách feature, ý nghĩa và cách tránh data leakage | Phạm Trung Hiếu |
-| `data-generator/` | Adapter dữ liệu, producer và fraud scenarios | Nguyễn Trung Hiếu |
-| `tests/` hoặc `docs/simulator_test.md` | Test schema, invalid/duplicate/late events và hướng dẫn tái lập | Cả hai |
+| Deliverable                                 | Nội dung tối thiểu                                                 | Owner               |
+| ------------------------------------------- | --------------------------------------------------------------------- | ------------------- |
+| `docs/problem_and_architecture.md`        | Bài toán, scope, fraud scenarios, sơ đồ Lambda                   | Nguyễn Trung Hiếu |
+| `docs/data_dictionary.md`                 | JSON schema, field definitions, constraints, validation rules         | Nguyễn Trung Hiếu |
+| `docs/eda_report.md` hoặc notebook       | EDA ULB/IEEE-CIS, biểu đồ, nhận xét và feature candidates       | Phạm Trung Hiếu   |
+| `docs/feature_v1.md`                      | Danh sách feature, ý nghĩa và cách tránh data leakage           | Phạm Trung Hiếu   |
+| `data-generator/`                         | Adapter dữ liệu, producer và fraud scenarios                       | Nguyễn Trung Hiếu |
+| `tests/` hoặc `docs/simulator_test.md` | Test schema, invalid/duplicate/late events và hướng dẫn tái lập | Cả hai             |
 
 ## 3. Phân công công việc
 
@@ -98,26 +98,26 @@ Kết thúc tuần, dự án có một thiết kế thống nhất và một dò
 
 ## 4. Cách phối hợp giữa hai thành viên
 
-| Điểm giao | Phạm Trung Hiếu | Nguyễn Trung Hiếu | Kết quả chung |
-|---|---|---|---|
-| Transaction schema | Xác định trường cần cho EDA/feature | Định nghĩa schema và validation | Data dictionary thống nhất |
-| Fraud patterns | Chỉ ra dấu hiệu cần phát hiện | Sinh event thể hiện đúng dấu hiệu | Scenario có thể dùng để test feature |
-| Feature v1 | Mô tả công thức và tránh leakage | Bảo đảm simulator có dữ liệu đầu vào cần thiết | Feature có thể triển khai ở Spark |
-| Data quality | Đề xuất kiểm tra từ EDA | Hiện thực sample/test cases | Rule set kiểm tra đầu vào |
+| Điểm giao        | Phạm Trung Hiếu                         | Nguyễn Trung Hiếu                                       | Kết quả chung                           |
+| ------------------ | ----------------------------------------- | --------------------------------------------------------- | ----------------------------------------- |
+| Transaction schema | Xác định trường cần cho EDA/feature | Định nghĩa schema và validation                       | Data dictionary thống nhất              |
+| Fraud patterns     | Chỉ ra dấu hiệu cần phát hiện       | Sinh event thể hiện đúng dấu hiệu                   | Scenario có thể dùng để test feature |
+| Feature v1         | Mô tả công thức và tránh leakage    | Bảo đảm simulator có dữ liệu đầu vào cần thiết | Feature có thể triển khai ở Spark     |
+| Data quality       | Đề xuất kiểm tra từ EDA              | Hiện thực sample/test cases                             | Rule set kiểm tra đầu vào             |
 
 Hai người review chéo deliverable của nhau trước khi kết thúc tuần: Phạm Trung Hiếu review tính hợp lý dữ liệu của simulator; Nguyễn Trung Hiếu review tính khả thi của feature set với streaming event schema.
 
 ## 5. Kế hoạch thực hiện theo ngày
 
-| Ngày | Phạm Trung Hiếu | Nguyễn Trung Hiếu | Mốc kiểm tra |
-|---|---|---|---|
-| 1 | Tải/khảo sát dataset, lập EDA questions | Viết problem definition và architecture draft | Thống nhất fraud scenarios |
-| 2 | Thống kê schema, missing/duplicates | Viết transaction schema và data dictionary draft | Review schema chung |
-| 3 | Tạo 2 biểu đồ đầu, phân tích imbalance | Xây normal generator và validator | Event normal hợp lệ |
-| 4 | Hoàn thiện 4 biểu đồ, mapping IEEE-CIS | Xây 4 fraud scenarios | Scenario tạo đúng pattern |
-| 5 | Viết feature candidates và metrics | Thêm invalid/duplicate/late rules | Test cases có sample data |
-| 6 | Kiểm tra leakage, hoàn thiện EDA report | Hoàn thiện simulator guide và tests | Review chéo |
-| 7 | Sửa theo review, chốt feature v1 | Sửa theo review, chốt data contract | Demo + checklist cuối tuần |
+| Ngày | Phạm Trung Hiếu                              | Nguyễn Trung Hiếu                                | Mốc kiểm tra               |
+| ----- | ---------------------------------------------- | -------------------------------------------------- | ---------------------------- |
+| 1     | Tải/khảo sát dataset, lập EDA questions    | Viết problem definition và architecture draft    | Thống nhất fraud scenarios |
+| 2     | Thống kê schema, missing/duplicates          | Viết transaction schema và data dictionary draft | Review schema chung          |
+| 3     | Tạo 2 biểu đồ đầu, phân tích imbalance | Xây normal generator và validator                | Event normal hợp lệ        |
+| 4     | Hoàn thiện 4 biểu đồ, mapping IEEE-CIS    | Xây 4 fraud scenarios                             | Scenario tạo đúng pattern |
+| 5     | Viết feature candidates và metrics           | Thêm invalid/duplicate/late rules                 | Test cases có sample data   |
+| 6     | Kiểm tra leakage, hoàn thiện EDA report     | Hoàn thiện simulator guide và tests             | Review chéo                 |
+| 7     | Sửa theo review, chốt feature v1             | Sửa theo review, chốt data contract              | Demo + checklist cuối tuần |
 
 ## 6. Checklist nghiệm thu
 

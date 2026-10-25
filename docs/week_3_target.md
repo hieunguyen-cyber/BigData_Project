@@ -165,10 +165,10 @@ giao evidence đúng hạn. Nguyễn Trung Hiếu chịu trách nhiệm toàn b�
 
 ## 6. Checklist nghiệm thu
 
-- [ ] `infra/hdfs/` có NameNode, DataNode, Service, PVC, probes, resources.
-- [ ] HDFS có sáu paths, I/O/checksum smoke test và persistence.
-- [ ] Full `verify_infra.sh`/`.ps1` PASS với tất cả tầng W2.
-- [ ] Có `batch_streaming_handoff.md`, `batch_pipeline_v1.md` và fixture batch.
+- [x] `infra/hdfs/` có NameNode, DataNode, Service, PVC, probes, resources.
+- [x] HDFS có sáu paths, I/O/checksum smoke test và persistence trên Kind cluster.
+- [x] Full `verify_infra.sh`/`.ps1` kiểm tra PASS các tầng W2 trên Kind cluster.
+- [x] Có `batch_streaming_handoff.md`, `batch_pipeline_v1.md` và fixture batch.
 - [ ] Checkpoint do Nguyễn Trung Hiếu tổng hợp có flow demo/evidence/code/biểu đồ.
 - [ ] Đạt/Phạm Trung Hiếu review đúng phạm vi và bàn giao evidence.
 - [ ] Evidence docs là kết quả chạy thật, không dùng output mẫu.

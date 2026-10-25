@@ -138,6 +138,40 @@ if ($nnPods -and $nnPods -notmatch "Error") {
     Log-Fail "HDFS NameNode not deployed; full W2 verification cannot pass."
 }
 
+$dnPod = kubectl get pods -n $Namespace -l app.kubernetes.io/component=datanode -o jsonpath='{.items[0].metadata.name}' 2>&1
+if ($dnPod -and $LASTEXITCODE -eq 0 -and $dnPod -notmatch "Error") {
+    $dnStatus = kubectl get pod $dnPod -n $Namespace -o jsonpath='{.status.phase}' 2>&1
+    if ($dnStatus -eq "Running") {
+        Log-Pass "HDFS DataNode pod $dnPod is Running."
+    } else {
+        Log-Fail "HDFS DataNode pod is in state $dnStatus"
+    }
+} else {
+    Log-Fail "HDFS DataNode not deployed; HDFS cannot store replicated blocks."
+}
+
+foreach ($pvc in @("hdfs-namenode-data-hdfs-namenode-0", "hdfs-datanode-data-hdfs-datanode-0")) {
+    $pvcPhase = kubectl get pvc $pvc -n $Namespace -o jsonpath='{.status.phase}' 2>&1
+    if ($LASTEXITCODE -eq 0 -and $pvcPhase -eq "Bound") {
+        Log-Pass "HDFS PVC $pvc is Bound."
+    } else {
+        Log-Fail "HDFS PVC $pvc is $pvcPhase; expected Bound."
+    }
+}
+
+if ($nnPods -and $dnPod -and $nnStatus -eq "Running" -and $dnStatus -eq "Running") {
+    $hdfsVerifyPath = "/fraud-data/raw/verify_infra_ps1.json"
+    $hdfsVerifyValue = '{"transaction_id":"tx_verify_infra_ps1","event_time":"2026-10-25T00:00:00Z","customer_id":"cus_verify_infra","card_id_hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merchant_id":"merchant_verify","amount":1.0,"currency":"VND","channel":"web","device_id_hash":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","ip_hash":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","country":"VN","transaction_status":"success"}'
+    $hdfsVerifyValue | kubectl exec -i -n $Namespace $nnPods -- /bin/bash -c "cat > /tmp/verify_infra_ps1.json" 2>&1 | Out-Null
+    kubectl exec -n $Namespace $nnPods -- hdfs dfs -put -f /tmp/verify_infra_ps1.json $hdfsVerifyPath 2>&1 | Out-Null
+    $hdfsReadback = kubectl exec -n $Namespace $nnPods -- hdfs dfs -cat $hdfsVerifyPath 2>&1
+    if ($LASTEXITCODE -eq 0 -and $hdfsReadback.Trim() -eq $hdfsVerifyValue) {
+        Log-Pass "HDFS PowerShell I/O read/write verification passed."
+    } else {
+        Log-Fail "HDFS PowerShell I/O read/write verification failed."
+    }
+}
+
 # Summary
 Write-Host "`n==================================================================" -ForegroundColor Cyan
 Write-Host " Infrastructure Verification Summary" -ForegroundColor Cyan

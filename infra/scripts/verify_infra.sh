@@ -85,7 +85,8 @@ if kubectl get pod cassandra-0 -n "${NAMESPACE}" >/dev/null 2>&1; then
         log_pass "Cassandra pod cassandra-0 is Running."
 
         # Check nodetool status
-        if kubectl exec -n "${NAMESPACE}" cassandra-0 -- nodetool status 2>/dev/null | grep -E -q '^UN\s+'; then
+        if kubectl exec -n "${NAMESPACE}" cassandra-0 -- nodetool status 2>/dev/null | \
+            awk '$1 == "UN" { healthy = 1 } END { exit !healthy }'; then
             log_pass "Cassandra node state is UN (Up Normal)."
         else
             log_fail "Cassandra node is not in UN state!"
@@ -133,7 +134,7 @@ NAMENODE_POD=$(kubectl get pods -n "${NAMESPACE}" -l app=hdfs-namenode -o jsonpa
                kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/component=namenode -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
 
 if [[ -n "${NAMENODE_POD}" ]]; then
-    NN_STATUS=$(kubectl get pod "${NAMENODE_POD}" -n "${NAMESPACE}" -o jsonpath='{.status.phase}')
+    NN_STATUS=$(kubectl get pod "${NAMENODE_POD}" -n "${NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
     if [[ "${NN_STATUS}" == "Running" ]]; then
         log_pass "HDFS NameNode pod ${NAMENODE_POD} is Running."
         
@@ -152,6 +153,37 @@ if [[ -n "${NAMENODE_POD}" ]]; then
     fi
 else
     log_fail "HDFS NameNode not deployed; full W2 verification cannot pass."
+fi
+
+DATANODE_POD=$(kubectl get pods -n "${NAMESPACE}" \
+    -l app.kubernetes.io/component=datanode \
+    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+if [[ -n "${DATANODE_POD}" ]]; then
+    DN_STATUS=$(kubectl get pod "${DATANODE_POD}" -n "${NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+    if [[ "${DN_STATUS}" == "Running" ]]; then
+        log_pass "HDFS DataNode pod ${DATANODE_POD} is Running."
+    else
+        log_fail "HDFS DataNode pod is in state ${DN_STATUS}"
+    fi
+else
+    log_fail "HDFS DataNode not deployed; HDFS cannot store replicated blocks."
+fi
+
+for pvc in hdfs-namenode-data-hdfs-namenode-0 hdfs-datanode-data-hdfs-datanode-0; do
+    PVC_PHASE=$(kubectl get pvc "${pvc}" -n "${NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "NotFound")
+    if [[ "${PVC_PHASE}" == "Bound" ]]; then
+        log_pass "HDFS PVC ${pvc} is Bound."
+    else
+        log_fail "HDFS PVC ${pvc} is ${PVC_PHASE}; expected Bound."
+    fi
+done
+
+if [[ -n "${NAMENODE_POD}" && -n "${DATANODE_POD}" ]]; then
+    if bash "${SCRIPT_DIR}/../hdfs/smoke_test.sh"; then
+        log_pass "HDFS I/O and SHA-256 smoke test passed."
+    else
+        log_fail "HDFS I/O and SHA-256 smoke test failed."
+    fi
 fi
 
 # ------------------------------------------------------------------

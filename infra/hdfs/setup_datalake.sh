@@ -60,24 +60,26 @@ kubectl wait --namespace "${NAMESPACE}" \
     --timeout="${TIMEOUT_READY}s"
 echo "       NameNode Ready."
 
-# Kiểm tra HDFS có live DataNode không (cần có ít nhất 1 DataNode để ghi được)
+# Kiểm tra HDFS có live DataNode không (cần có ít nhất 1 DataNode để ghi được).
+# Không coi cảnh báo là PASS: mkdir có thể thành công khi DataNode chưa usable,
+# nhưng file write sau đó sẽ không bền vững.
 echo "       Kiểm tra live DataNodes..."
-DN_COUNT=$(kubectl exec -n "${NAMESPACE}" "${NAMENODE_POD}" -- \
-    hdfs dfsadmin -report 2>/dev/null | grep -c "Live datanodes" || echo "0")
-
-if [[ "${DN_COUNT}" -lt 1 ]]; then
-  # Thử một lần nữa sau 10 giây (DataNode có thể vẫn đang đăng ký)
-  echo "       Chưa có live DataNode — chờ thêm 15s..."
-  sleep 15
-  LIVE=$(kubectl exec -n "${NAMESPACE}" "${NAMENODE_POD}" -- \
-      hdfs dfsadmin -report 2>/dev/null | grep "Live datanodes" || true)
-  if ! echo "${LIVE}" | grep -q "Live datanodes (1)"; then
-    echo "WARNING: Không xác nhận được live DataNode từ dfsadmin report."
-    echo "         Script sẽ tiếp tục; nếu mkdir thất bại hãy kiểm tra DataNode."
-  else
+DEADLINE=$((SECONDS + TIMEOUT_READY))
+while true; do
+  DFSREPORT=$(kubectl exec -n "${NAMESPACE}" "${NAMENODE_POD}" -- \
+      hdfs dfsadmin -report 2>/dev/null || true)
+  if echo "${DFSREPORT}" | grep -Eq 'Live datanodes \([1-9][0-9]*\)'; then
     echo "       Live DataNode đã sẵn sàng."
+    break
   fi
-fi
+  if [[ "${SECONDS}" -ge "${DEADLINE}" ]]; then
+    echo "ERROR: Không có Live DataNode sau ${TIMEOUT_READY}s; dừng bootstrap."
+    echo "       Kiểm tra: kubectl get pods -n ${NAMESPACE} -l app.kubernetes.io/component=datanode"
+    exit 1
+  fi
+  echo "       Chưa có Live DataNode — thử lại sau 10s..."
+  sleep 10
+done
 
 # ------------------------------------------------------------------
 # 3. Tạo 6 thư mục data-lake (idempotent)

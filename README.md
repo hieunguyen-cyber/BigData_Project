@@ -4,7 +4,34 @@
 
 Deliverables Tuần 1: [EDA và hướng dẫn chạy](README_WEEK1.md), [mục tiêu sprint](docs/week_1_target.md), [kiến trúc](docs/problem_and_architecture.md), [data contract](docs/data_dictionary.md), [trạng thái tích hợp](docs/week1_integration.md). Deliverables Tuần 2: [mục tiêu hạ tầng nền](docs/week_2_target.md), [hướng dẫn triển khai](docs/week_2_deployment.md), [bằng chứng kiểm thử](docs/week_2_test_evidence.md). Toàn bộ mã Python dùng chung `requirements.txt` và môi trường chuẩn của nhóm.
 
+Tái lập W2 trên máy khác: cài Docker Desktop, `kind`, `kubectl`, Python 3 và
+chạy `make reproduce`. Chi tiết target và review kỹ thuật nằm tại
+[`docs/week_2_cross_review.md`](docs/week_2_cross_review.md).
+
 > Hệ thống phát hiện gian lận giao dịch thanh toán trực tuyến theo thời gian thực, xây dựng theo Lambda Architecture.
+
+## Tái lập hạ tầng W2
+
+Cần Docker Desktop đang chạy, `kind`, `kubectl`, GNU Make và Python 3. Chạy từ
+root repository:
+
+```bash
+make reproduce
+```
+
+Lệnh này tạo hoặc tái sử dụng Kind cluster `fraudstream-cluster`, kiểm tra
+platform/PVC, deploy Cassandra-Kafka-HDFS, bootstrap topics và data lake, chạy
+full verifier và luồng simulator → Kafka → HDFS. Các lệnh hữu ích khác:
+
+```bash
+make status       # xem 4 workload và PVC
+make persistence  # kiểm tra durability qua pod recreate
+make test          # test Python
+make destroy CONFIRM=1  # xóa cluster và toàn bộ dữ liệu local (có chủ đích)
+```
+
+Xem `make help` để có danh sách đầy đủ. Các data local của Kind chỉ tồn tại
+trong cluster hiện tại; không chạy target `destroy` nếu còn cần evidence/demo.
 
 ## Thành viên nhóm
 

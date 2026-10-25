@@ -122,10 +122,10 @@ DFSREPORT=$(kubectl exec -n "${NAMESPACE}" "${NAMENODE_POD}" -- \
     hdfs dfsadmin -report 2>/dev/null || true)
 echo "${DFSREPORT}"
 
-if echo "${DFSREPORT}" | grep -q "Live datanodes (1)"; then
-  log_pass "HDFS healthy — Live datanodes: 1"
+if echo "${DFSREPORT}" | grep -Eq 'Live datanodes \([1-9][0-9]*\)'; then
+  log_pass "HDFS healthy — có ít nhất một Live DataNode."
 else
-  log_fail "Không xác nhận được 'Live datanodes (1)' từ dfsadmin report."
+  log_fail "Không xác nhận được Live DataNode từ dfsadmin report."
 fi
 
 # ------------------------------------------------------------------

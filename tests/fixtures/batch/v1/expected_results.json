@@ -2,10 +2,10 @@
   "fixture_name": "fraudstream_batch_quality_v1",
   "fixture_version": "1.0.0",
   "classification_order": [
+    "valid",
     "invalid",
     "duplicate",
-    "late",
-    "valid"
+    "late"
   ],
   "input_count": 4,
   "counts": {

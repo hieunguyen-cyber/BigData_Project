@@ -1,10 +1,10 @@
 # Hướng dẫn Triển khai Hạ tầng Nền tảng Tuần 2 (FraudStream)
 
 Tài liệu hướng dẫn triển khai môi trường Kubernetes local và các phần hạ tầng
-Tuần 2 trong namespace `fraudstream`. Hiện có thể triển khai/kiểm thử
-**Cassandra** và **Kafka**; **HDFS chưa có deliverable** nên không mô tả như
-một dịch vụ đã sẵn sàng. Trạng thái nghiệm thu chung nằm tại
-[`week_2_target.md`](week_2_target.md).
+Tuần 2 trong namespace `fraudstream`. Repository đã có manifests và kiểm thử
+cho **Cassandra**, **Kafka** và **HDFS**. Chỉ đánh dấu nghiệm thu sau khi chạy
+thành công toàn bộ luồng trên một cluster; trạng thái bằng chứng nằm tại
+[`week_2_target.md`](week_2_target.md) và [`week_2_test_evidence.md`](week_2_test_evidence.md).
 
 ---
 
@@ -58,7 +58,8 @@ flowchart TD
 |---|---|---|---|---|
 | **Cassandra** | StatefulSet (`cassandra-0`) | `cassandra.fraudstream.svc.cluster.local` | `9042` | `standard` (5Gi) |
 | **Kafka** | StatefulSet / Pod | `kafka.fraudstream.svc.cluster.local` | `9092` | `standard` |
-| **HDFS NameNode** | StatefulSet / Pod | `hdfs-namenode.fraudstream.svc.cluster.local` | `9000` (hoặc `8020`), Web: `9870` | `standard` |
+| **HDFS NameNode** | StatefulSet `hdfs-namenode-0` | `hdfs-namenode.fraudstream.svc.cluster.local` | RPC `9000`, Web `9870` | `standard` (5 GiB) |
+| **HDFS DataNode** | StatefulSet `hdfs-datanode-0` | `hdfs-datanode-0.hdfs-datanode-headless.fraudstream.svc.cluster.local` | Data `9866`, IPC `9867`, Web `9864` | `standard` (8 GiB) |
 
 ---
 
@@ -253,12 +254,41 @@ liệu cũ. Bootstrap dừng nếu topic có sẵn nhưng sai cấu hình; khôn
 
 ## 6. Triển khai Apache HDFS (Lê Trọng Đạt)
 
-HDFS chưa được triển khai trong repository. Vì vậy không chạy verifier đầy đủ
-và không coi Tuần 2 đã hoàn thành chỉ với Kafka/Cassandra. Khi có
-`infra/hdfs/`, phần này phải được bổ sung bằng manifests NameNode/DataNode,
-PVC, sáu thư mục data lake, smoke test upload/list/read/checksum và persistence
-test. Verifier chung đã sẵn sàng kiểm tra NameNode và sáu đường dẫn đó, nhưng
-sẽ trả exit code 1 cho đến khi deliverable HDFS tồn tại và hoạt động.
+HDFS local dùng một NameNode và một DataNode, replication factor `1`. Đây là
+cấu hình demo có persistence qua recreate pod trong cùng Kind cluster, không
+phải mô hình HA hay chịu mất node. Metadata NameNode nằm trên PVC 5 GiB, blocks
+DataNode nằm trên PVC 8 GiB; không dùng `emptyDir` cho dữ liệu HDFS.
+
+Triển khai theo đúng thứ tự dưới đây vì DataNode dùng ConfigMap và Service do
+file NameNode tạo:
+
+```bash
+kubectl apply -f infra/hdfs/hdfs-namenode.yaml
+kubectl rollout status statefulset/hdfs-namenode -n fraudstream --timeout=300s
+kubectl apply -f infra/hdfs/hdfs-datanode.yaml
+kubectl rollout status statefulset/hdfs-datanode -n fraudstream --timeout=300s
+kubectl get pods,pvc,svc -n fraudstream -l app.kubernetes.io/part-of=fraudstream
+```
+
+Khi hai pod `Ready`, bootstrap tạo idempotent sáu thư mục chuẩn:
+`/fraud-data/raw`, `/cleaned`, `/curated`, `/late_events`, `/checkpoints`, và
+`/models`. Script sẽ **fail** nếu DataNode chưa xuất hiện trong
+`hdfs dfsadmin -report`, tránh tạo PASS giả khi filesystem chưa ghi block được.
+
+```bash
+bash infra/hdfs/setup_datalake.sh
+bash infra/hdfs/smoke_test.sh
+bash infra/hdfs/smoke_test.sh --test-persistence
+```
+
+Smoke test ghi một JSONL hợp data contract vào raw, list, đọc lại và so sánh
+SHA-256 byte-for-byte. Tuỳ chọn persistence xóa NameNode pod, chờ StatefulSet
+tạo lại pod rồi kiểm tra file/checksum trên PVC. Chỉ lưu output thực tế vào
+`week_2_test_evidence.md`; không dùng log mẫu làm evidence.
+
+Contract mà batch/streaming dùng được mô tả tại
+[`batch_streaming_handoff.md`](batch_streaming_handoff.md). Raw giữ JSONL bất
+biến, còn cleaned/curated được dành cho Parquet + Snappy ở giai đoạn Spark.
 
 ---
 
@@ -278,7 +308,18 @@ Script sẽ tuần tự kiểm tra:
 1. Trạng thái Kubernetes Nodes, CoreDNS và PVCs.
 2. Trạng thái Cassandra (`UN`), schema keyspace và smoke test query.
 3. Kafka pod Ready, PVC Bound, cấu hình 4 topics và producer/consumer 100 events.
-4. Trạng thái HDFS NameNode và 6 thư mục Data Lake chuẩn.
+4. Trạng thái HDFS NameNode/DataNode, hai PVC, 6 thư mục Data Lake và HDFS
+   write/read/checksum smoke test.
+
+Sau khi verifier PASS, có thể chứng minh handoff simulator → Kafka → HDFS raw:
+
+```bash
+python3 infra/scripts/integration_smoke.py
+```
+
+Script tạo 100 event hợp schema, gửi/đọc lại Kafka với key `card_id_hash`, rồi
+ghi chính JSONL đó vào HDFS raw và so SHA-256. Nó để file raw có `run_id` trong
+HDFS làm evidence, đồng thời xóa Kafka client pod và file tạm trên host.
 
 ---
 
@@ -290,6 +331,13 @@ Chỉ gỡ Kafka, giữ PVC và các dịch vụ khác:
 
 ```bash
 kubectl delete -f infra/kafka/kafka.yaml
+```
+
+Chỉ gỡ workloads HDFS nhưng giữ PVC để kiểm tra persistence ở lần deploy sau:
+
+```bash
+kubectl delete -f infra/hdfs/hdfs-datanode.yaml
+kubectl delete -f infra/hdfs/hdfs-namenode.yaml
 ```
 
 PVC do StatefulSet tạo được giữ lại để lần deploy sau dùng lại dữ liệu.
@@ -317,6 +365,21 @@ Lỗi DNS từ laptop: dùng smoke test có client pod; endpoint nội bộ khô
 được thiết kế cho producer kết nối trực tiếp từ Mac. Nếu sửa ConfigMap,
 chạy `kubectl rollout restart statefulset/kafka -n fraudstream` để pod nhận
 biến môi trường mới.
+
+**HDFS:** trước tiên xác nhận cả hai PVC `Bound` và hai pod `Ready`:
+
+```bash
+kubectl get pods,pvc -n fraudstream
+kubectl logs hdfs-namenode-0 -n fraudstream --tail=100
+kubectl logs hdfs-datanode-0 -n fraudstream --tail=100
+kubectl exec -n fraudstream hdfs-namenode-0 -- hdfs dfsadmin -report
+```
+
+Nếu `Live datanodes (0)`, kiểm tra DNS Service `hdfs-namenode`, ConfigMap
+`hdfs-config` và log DataNode; không chạy setup lại để bỏ qua lỗi này. Nếu PVC
+`Pending`, kiểm tra `kubectl get storageclass` và sự kiện pod/PVC. Nếu NameNode
+không khởi động sau PVC mới, xem init container `namenode-format` để biết việc
+format có hoàn tất hay không.
 
 ### 1. Pod Cassandra ở trạng thái `Pending`
 - **Nguyên nhân**: Thiếu tài nguyên CPU/RAM hoặc StorageClass không cấp phát được PVC.

@@ -4,9 +4,10 @@ Tài liệu ghi lại kết quả smoke test, thông số môi trường, mức 
 
 **Phạm vi bằng chứng:** mục 1–3 giữ snapshot Windows/Cassandra đã có của
 Khôi. Mục 4 là kết quả Kafka thực tế của Hoàng trên Mac ngày **2026-10-19**
-(UTC+7). HDFS chưa có implementation nên không có bằng chứng HDFS. Các
-snapshot này không phải một lần kiểm thử end-to-end; `verify_infra` đầy đủ
-được thiết kế để fail cho đến khi HDFS hoàn thành.
+(UTC+7). Bổ sung runtime evidence toàn hệ thống trên Mac/Kind ngày
+**2026-10-25 (UTC+7)**: một node Kind v1.34.11, bốn workload Ready và bốn PVC
+Bound. Bash lẫn PowerShell verifier đã đi qua platform, Cassandra, Kafka và
+HDFS; các chi tiết HDFS/full integration nằm ở mục 5.
 
 ---
 
@@ -23,7 +24,7 @@ Bảng phiên bản công cụ thực tế sử dụng trong kiểm thử:
 | **kubectl** | Client v1.30+ / 1.34.1 | Tương thích từng snapshot tương ứng |
 | **Apache Cassandra** | 4.1 (`cassandra:4.1`) | Single-node local StatefulSet |
 | **Apache Kafka** | Định hướng ban đầu: 3.7+ | Kết quả thực tế Kafka 3.9.1 trên Mac xem mục 4 |
-| **Apache HDFS** | Chưa chọn image/phiên bản | Chưa có implementation hoặc test evidence |
+| **Apache HDFS** | Hadoop 3.2.1 / Java 8 (`bde2020`) | NameNode/DataNode, HDFS I/O/checksum và persistence PASS ngày 25/10 |
 
 ---
 
@@ -285,31 +286,37 @@ Chưa benchmark throughput, latency hay resource peak.
 
 ## 5. Trạng thái Apache HDFS
 
-Chưa có `infra/hdfs/`, do đó chưa có NameNode/DataNode, PVC, data-lake
-layout hay smoke test I/O. Khối bên dưới là mẫu bàn giao cũ, **không phải kết
-quả đã chạy** và không được dùng làm bằng chứng nghiệm thu. HDFS chỉ hoàn tất
-khi manifests được versioned và có upload/list/read/checksum cùng persistence
-test qua restart.
+`infra/hdfs/` hiện có ConfigMap chung, Services, NameNode/DataNode StatefulSet,
+PVC 5 GiB/8 GiB, bootstrap sáu paths và smoke test. Cấu hình pin Hadoop 3.2.1
+/ Java 8, replication factor `1`; đây là giới hạn chủ động cho Kind local.
 
-- **Ví dụ trạng thái cần đạt (chưa chạy)**: `hdfs-namenode-0` (Running), `hdfs-datanode-0` (Running).
-- **Ví dụ layout cần đạt (chưa chạy)**:
-  ```text
-  $ hdfs dfs -ls /fraud-data
-  drwxr-xr-x   - root supergroup          0 2026-10-18 15:00 /fraud-data/checkpoints
-  drwxr-xr-x   - root supergroup          0 2026-10-18 15:00 /fraud-data/cleaned
-  drwxr-xr-x   - root supergroup          0 2026-10-18 15:00 /fraud-data/curated
-  drwxr-xr-x   - root supergroup          0 2026-10-18 15:00 /fraud-data/late_events
-  drwxr-xr-x   - root supergroup          0 2026-10-18 15:00 /fraud-data/models
-  drwxr-xr-x   - root supergroup          0 2026-10-18 15:00 /fraud-data/raw
-  ```
-- **I/O Test**: Upload file `sample_event.json` vào `/fraud-data/raw/`, đọc lại bằng `hdfs dfs -cat` và so khớp MD5 checksum khớp 100%.
+| Hạng mục | Cách kiểm tra đã versioned | Trạng thái evidence |
+|---|---|---|
+| NameNode/DataNode, probes, Service DNS, PVC | `hdfs-namenode.yaml`, `hdfs-datanode.yaml` | Hai pod Ready; PVC NameNode 5 GiB và DataNode 8 GiB đều Bound |
+| Sáu paths data lake | `bash infra/hdfs/setup_datalake.sh` | PASS, đủ `raw/cleaned/curated/late_events/checkpoints/models` |
+| Live DataNode | `hdfs dfsadmin -report` trong setup/smoke | PASS, `Live datanodes (1)`, không corrupt/missing blocks |
+| JSONL write/list/cat/SHA-256 | `bash infra/hdfs/smoke_test.sh` | PASS, SHA-256 local/HDFS: `2acff3ef…b58aa881` |
+| Persistence NameNode recreate | `bash infra/hdfs/smoke_test.sh --test-persistence` | PASS; UID NameNode đổi `013a868b…` → `829b8a36…`, file smoke vẫn đọc được |
+| Full HDFS verification | `verify_infra.sh` / `.ps1` | PASS; PowerShell ghi/đọc lại `verify_infra_ps1.json` từ HDFS |
+
+Integration contract cũng đã được chạy: simulator tạo 100 event hợp schema,
+Kafka gửi/đọc lại đúng key/value, rồi JSONL được lưu tại
+`/fraud-data/raw/integration_83721287ecfe.jsonl` (52,465 bytes). Đọc lại từ
+HDFS cho đủ 100 event hợp schema; SHA-256 là
+`ea121af95b59aa9517b0587004b820b9995fdd4a768189fcd964dba235f68187`.
+
+Lần Kafka persistence run `f9069943f05a` gửi/đọc 100/100 event, broker và
+client đều đổi UID sau recreate, trong khi PVC/PV
+`pvc-4addca8f-e8be-43bd-b42c-b9e50deecf81` giữ nguyên. Full verifier Bash và
+PowerShell tiếp tục gửi/đọc 100 event trong `transactions_raw`; các report
+JSON mỗi lượt nằm trong `out/` (gitignored).
 
 ---
 
 ## 6. Mức Sử Dụng Tài Nguyên (Resource Footprint)
 
 Các giá trị peak Cassandra chưa được đo lại trên Mac của Hoàng; HDFS chưa có
-deliverable để đo.
+đo runtime.
 Không coi bảng này là phép đo tổng tài nguyên end-to-end. Requests/PVC
 Kafka khớp cấu hình thực tế tại mục 4; peak Kafka chưa đo.
 
@@ -317,9 +324,9 @@ Kafka khớp cấu hình thực tế tại mục 4; peak Kafka chưa đo.
 |---|---|---|---|---|---|
 | `cassandra-0` | 300m | ~450m (lúc khởi động) | 1 Gi | ~920 MiB | 5 Gi |
 | `kafka-0` | 250m | Chưa đo | 512 Mi | Chưa đo | 5 Gi |
-| `hdfs-namenode-0` | Chưa xác định | Chưa đo | Chưa xác định | Chưa đo | Chưa xác định |
-| `hdfs-datanode-0` | Chưa xác định | Chưa đo | Chưa xác định | Chưa đo | Chưa xác định |
-| **Tổng phần đã triển khai (Kafka + Cassandra)** | **550m** | **Chưa đo** | **1.5 Gi** | **Chưa đo** | **10 Gi** |
+| `hdfs-namenode-0` | 300m | Chưa đo | 768 Mi | Chưa đo | 5 Gi |
+| `hdfs-datanode-0` | 300m | Chưa đo | 768 Mi | Chưa đo | 8 Gi |
+| **Tổng cấu hình requests/PVC** | **1.15 CPU** | **Chưa đo** | **3 Gi** | **Chưa đo** | **23 Gi** |
 
 JVM heap giới hạn để phù hợp local. Cần đo CPU/RAM thực tế khi cả ba
 dịch vụ đã được triển khai trước khi kết luận tổng footprint.

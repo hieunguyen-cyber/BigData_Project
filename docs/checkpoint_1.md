@@ -1,15 +1,23 @@
 # Checkpoint 1 — FraudStream: W1 và W2
 
-> Cập nhật 21/10/2026. Tài liệu là nguồn nội dung cho báo cáo checkpoint 1.
-> Mỗi kết quả được ghi rõ: đã chạy, đã có mã/tài liệu, hoặc chưa hoàn thành.
+> Cập nhật 25/10/2026. Tài liệu này là nguồn nội dung cho checkpoint 1. Mỗi
+> kết quả được phân biệt rõ giữa **đã chạy có output**, **đã có mã/tài liệu**
+> và **phần roadmap chưa triển khai**.
 
 ## 1. Bài toán
 
-FraudStream phát hiện gian lận thanh toán trực tuyến gần thời gian thực. Mỗi
-giao dịch là một event, được kiểm tra chất lượng, tính tín hiệu hành vi và
-gán `risk_score` cùng quyết định `APPROVE`, `REVIEW` hoặc `BLOCK`.
+FraudStream phát hiện sớm gian lận thanh toán trực tuyến gần thời gian thực.
+Mỗi giao dịch là một event có thời điểm phát sinh, định danh đã băm và thông
+tin giao dịch. Hệ thống kiểm tra chất lượng dữ liệu, tổng hợp hành vi theo
+event time, sau đó tạo `risk_score` và một trong ba quyết định:
 
-| Kịch bản | Dấu hiệu |
+| Quyết định | Ý nghĩa nghiệp vụ |
+|---|---|
+| `APPROVE` | Rủi ro thấp, giao dịch được chấp nhận |
+| `REVIEW` | Có tín hiệu đáng ngờ, cần kiểm tra thêm |
+| `BLOCK` | Rủi ro cao, cần tạm chặn |
+
+| Kịch bản fraud | Dấu hiệu ban đầu |
 |---|---|
 | Normal | Không vượt ngưỡng rủi ro |
 | Card testing | `failed_tx_count_10m >= 3` |
@@ -17,196 +25,333 @@ gán `risk_score` cùng quyết định `APPROVE`, `REVIEW` hoặc `BLOCK`.
 | Device sharing | `unique_cards_per_device_1h >= 3` |
 | High-value anomaly | `amount_vs_avg_7d >= 5` |
 
-## 2. Data thật và simulator
+Mục tiêu checkpoint không phải tuyên bố đã có model fraud hoàn chỉnh. Mục tiêu
+là chứng minh nhóm đã hiểu bài toán, chuẩn hóa event, có simulator/data thật
+cho hai mục đích khác nhau và đã dựng nền tảng dữ liệu có thể nhận-lưu-kiểm tra
+sự kiện một cách tái lập.
 
-Hai nguồn bổ trợ nhau. Data thật dùng cho EDA, imbalance, baseline ML và
-đánh giá offline. Simulator tạo event stream tái lập được để test Kafka,
-Spark, HDFS, Cassandra và những hành vi mà data công khai không thể hiện đủ
-(card testing, velocity, device sharing, invalid/duplicate/late event).
+## 2. Nguồn dữ liệu và simulator
 
-> Metric model chỉ đánh giá trên dữ liệu thật. Simulator không được dùng để
-> tuyên bố accuracy model; nó dùng để kiểm thử pipeline và demo có kiểm soát.
+Hai nguồn dữ liệu bổ trợ nhau, không thay thế nhau:
 
-## 3. Thiết kế hệ thống
+| Nguồn | Dùng để làm gì | Không dùng để làm gì |
+|---|---|---|
+| ULB Credit Card Fraud Detection | EDA, đo class imbalance, baseline ML và đánh giá offline | Mô phỏng đầy đủ event-time, thẻ/thiết bị/IP thực tế |
+| Fraud simulator | Test Kafka/HDFS/Cassandra/Spark, demo tái lập, tạo velocity/late/duplicate/invalid | Khẳng định accuracy hay PR-AUC của model |
+
+EDA từ ULB có 284,807 giao dịch, 492 fraud (0.173%), tỷ lệ non-fraud : fraud
+khoảng 578 : 1, 1,081 duplicate hoàn toàn và không có missing value. Vì fraud
+rất hiếm, accuracy không đủ ý nghĩa; các chỉ số cần dùng ở giai đoạn model là
+Precision, Recall, F1, PR-AUC và False Positive Rate.
+
+Simulator sinh event theo seed để hai lần chạy cùng tham số cho kết quả có thể
+kiểm tra. Nó tạo cả traffic bình thường lẫn pattern fraud, đồng thời tạo được
+quality cases mà dataset công khai không mô tả đầy đủ.
+
+## 3. Data contract và nguyên tắc xử lý
+
+`transaction_event_v1` có 12 trường bắt buộc, bao gồm `transaction_id`,
+`event_time` UTC, `customer_id`, `card_id_hash`, `merchant_id`, `amount`,
+`currency`, `channel`, `device_id_hash`, `ip_hash`, `country` và
+`transaction_status`.
+
+| Thành phần contract | Quy ước | Lý do |
+|---|---|---|
+| `transaction_id` | Idempotency key | Phát hiện và loại bản ghi trùng |
+| `card_id_hash` | Kafka message key | Các event của cùng thẻ đi vào cùng partition, hỗ trợ feature theo thẻ |
+| `event_time` UTC | Thời điểm nghiệp vụ, không phải thời điểm hệ thống nhận event | Dùng cho window, watermark và partition ngày |
+| Định danh nhạy cảm | Synthetic hoặc SHA-256 hash | Không đưa PII vào repository/demo |
+| Thứ tự quality | `invalid → duplicate → late → valid` | Bản ghi sai schema không được đi tiếp; duplicate không tạo tín hiệu kép |
+| Watermark khởi điểm | 10 phút | Tách event đến trễ khỏi luồng xử lý đúng hạn |
+
+Feature v1 gồm `tx_count_5m`, `amount_sum_1h`, `failed_tx_count_10m`,
+`unique_cards_per_device_1h`, `amount_vs_avg_7d`, `is_new_merchant` và
+`is_new_country`. Nguyên tắc bắt buộc là feature tại thời điểm *t* không được
+dùng label, future event hay thông tin hậu giao dịch. Đây là cách tránh data
+leakage khi train/evaluate model sau này.
+
+## 4. Lambda Architecture của FraudStream
+
+Lambda Architecture kết hợp hai cách xử lý cùng dùng một nguồn event:
+
+- **Speed layer** xử lý event mới nhanh để ra score/alert gần thời gian thực.
+- **Batch layer** đọc lịch sử để làm sạch, tổng hợp feature, train/evaluate
+  model và có thể backfill dữ liệu đến trễ.
+- **Serving layer** phục vụ truy vấn kết quả score/alert nhanh cho ứng dụng hay
+  dashboard.
 
 ```mermaid
 flowchart LR
-    A[Public datasets / Fraud simulator] --> B[(Kafka: transactions_raw)]
-    B --> C[Spark Structured Streaming]
-    B --> D[Spark SQL + MLlib batch]
-    C --> E[(HDFS: raw / cleaned / curated)]
-    D --> E
-    D --> F[Model artifact / feature profiles]
-    F --> C
-    C --> G[(Cassandra: risk scores / alerts)]
-    C --> H[(Kafka: fraud_alerts)]
+    A[Dataset thật: EDA / offline evaluation] --> D[Spark Batch - roadmap]
+    B[Fraud simulator] --> K[(Kafka transactions_raw)]
+    K --> H[(HDFS raw JSONL)]
+    K --> S[Spark Structured Streaming - roadmap]
+    H --> D
+    D --> C[(HDFS cleaned / curated Parquet)]
+    D --> M[Model / feature profile]
+    M --> S
+    S --> CS[(Cassandra risk scores / alerts)]
+    S --> KA[(Kafka fraud_alerts)]
+    CS --> UI[Dashboard / API - roadmap]
 ```
 
-| Layer | Trạng thái |
+| Chặng | Trạng thái | Ý nghĩa |
+|---|---|---|
+| Simulator → Kafka | Đã chạy | Chứng minh event có schema/key đi vào event bus |
+| Kafka → HDFS raw | Đã chạy | Giữ JSONL bất biến để audit/replay/batch xử lý |
+| Raw → cleaned/curated Parquet | Đã thiết kế contract | Batch Spark là milestone sau checkpoint |
+| Streaming score → Cassandra/alerts | Chưa triển khai | Thuộc Structured Streaming/model milestone |
+| Dashboard/model metrics | Chưa triển khai | Thuộc tuần dashboard/ML |
+
+HDFS raw không phải là nơi “ra quyết định fraud”; nó là nguồn lịch sử bền vững
+để Spark đọc lại. Cassandra cũng không thay HDFS: Cassandra tối ưu cho truy
+vấn score/alert theo khóa trong thời gian ngắn, còn HDFS tối ưu lưu file lớn và
+scan/ETL batch.
+
+## 5. Công cụ sử dụng và nhiệm vụ trong hệ thống
+
+| Công cụ | Là gì | Vai trò cụ thể trong FraudStream | Trạng thái checkpoint |
+|---|---|---|---|
+| Docker Desktop | Runtime chạy container local | Cung cấp nền cho Kind và image của các service | Đã chạy |
+| Kind | Kubernetes chạy trong Docker | Dựng cluster local tái lập `fraudstream-cluster` | Đã chạy, pin Kubernetes v1.34.11 |
+| Kubernetes | Hệ thống điều phối container | Chạy StatefulSet, Service, ConfigMap, PVC, probe và quota | Đã chạy |
+| Kafka | Distributed event streaming platform | Nhận `transactions_raw`, giữ thứ tự theo key/partition, cung cấp event cho consumer | Đã chạy, 4 topic |
+| HDFS | Distributed file system | Lưu `raw`, `cleaned`, `curated`, `late_events`, `checkpoints`, `models` | Đã chạy NameNode + DataNode |
+| Cassandra | NoSQL wide-column database | Serving store cho risk score/alert, query theo `card_id_hash` và event time | Đã chạy 1 node local |
+| Spark SQL / MLlib | Engine batch + machine learning | ETL raw→Parquet, feature engineering, train/evaluate model | Roadmap, chưa chạy |
+| Spark Structured Streaming | Event processing engine | Dedup, watermark, online feature/scoring và phát alert | Roadmap, chưa chạy |
+| Python simulator | Chương trình sinh event có kiểm soát | Sinh 5 scenario, validate schema, phục vụ test/demo | Đã chạy |
+| pytest | Framework kiểm thử Python | Kiểm tra generator, schema, quality và batch fixture | Đã chạy |
+| Make | Task runner | Chuẩn hóa `reproduce`, `verify`, `integration`, `persistence` cho máy khác | Đã chạy |
+
+### Vì sao dùng StatefulSet và PVC?
+
+Kafka, Cassandra và HDFS lưu state. `StatefulSet` giữ tên pod ổn định như
+`kafka-0` hoặc `hdfs-namenode-0`; `PersistentVolumeClaim` (PVC) gắn một volume
+cho pod để data không mất khi pod bị recreate. Trong demo local, persistence
+chỉ được chứng minh qua pod restart cùng Kind cluster; xóa cluster sẽ xóa data
+local.
+
+### Endpoint và storage contract quan trọng
+
+| Thành phần | Endpoint/path | Hợp đồng sử dụng |
+|---|---|---|
+| Kafka | `kafka.fraudstream.svc.cluster.local:9092` | Key UTF-8 `card_id_hash`; value JSON UTF-8 event v1 |
+| HDFS NameNode | `hdfs-namenode.fraudstream.svc.cluster.local:9000` | Raw JSONL immutable tại `/fraud-data/raw/` |
+| HDFS cleaned/curated | `/fraud-data/cleaned/`, `/fraud-data/curated/` | Dành cho Parquet + Snappy, partition `event_date` ở batch phase |
+| Cassandra | `cassandra.fraudstream.svc.cluster.local:9042` | Risk/alert query bằng partition key thẻ + event time |
+
+## 6. Kết quả W1
+
+- Có EDA notebook/report, nêu rõ imbalance, fraud rate và amount distribution.
+- Có data dictionary, quality rules và fixture valid-invalid-duplicate-late.
+- Có feature v1 kèm event-time window, cold start, batch/streaming feasibility
+  và anti-leakage checks.
+- `producer.py`, `scenarios.py`, `schema.py` hỗ trợ normal, card testing,
+  velocity fraud, device sharing và high-value anomaly.
+
+Kết quả chạy mới nhất ở cuối tài liệu: 108 `velocity_fraud` event đều
+parse/validate được, không duplicate/out-of-order và có một thẻ đạt
+`count_5m = 8`.
+
+## 7. Kết quả W2 và bằng chứng runtime
+
+### 7.1. Platform Kubernetes
+
+Cluster Kind có một node Ready, namespace `fraudstream`, CoreDNS, StorageClass
+`standard`, ResourceQuota/LimitRange và preflight PVC mount/read-write. Bốn
+Stateful workload dưới đây đang Ready; cả bốn PVC Bound.
+
+| Workload | Persistence | Nhiệm vụ |
+|---|---|---|
+| `kafka-0` | PVC 5 GiB | Broker KRaft, event topics |
+| `cassandra-0` | PVC 5 GiB | Serving store score/alert |
+| `hdfs-namenode-0` | PVC 5 GiB | Metadata và namespace HDFS |
+| `hdfs-datanode-0` | PVC 8 GiB | Blocks dữ liệu HDFS |
+
+### 7.2. Kafka
+
+Kafka 3.9.1 chạy KRaft mode với 4 topic: `transactions_raw` (3 partitions,
+7 ngày), `transactions_invalid` (1 partition, 3 ngày), `fraud_alerts` (3
+partitions, 7 ngày) và `fraud_feedback` (1 partition, 30 ngày). RF=1 là lựa
+chọn local demo, không phải cấu hình high availability.
+
+Smoke test đã gửi/đọc 100/100 event, JSON không thay đổi, schema hợp lệ và key
+khớp `card_id_hash`. Persistence test tạo lại broker/client với UID mới nhưng
+PVC/PV giữ nguyên; dữ liệu vẫn đọc được.
+
+### 7.3. Cassandra
+
+Cassandra một node có keyspace `fraudstream`, bảng `transaction_risk` và
+`fraud_alert`. Khóa chính của risk table là
+`PRIMARY KEY ((card_id_hash), event_time, transaction_id)`: partition theo thẻ
+để truy vấn lịch sử một thẻ nhanh, sắp theo thời gian và vẫn phân biệt từng
+giao dịch.
+
+`nodetool status` trả `UN` (Up/Normal). Smoke test insert/select đọc được hai
+quyết định `APPROVE` và `BLOCK`, sau recreate pod dữ liệu vẫn còn. Trong lần
+nghiệm thu đã phát hiện liveness probe tìm literal `${POD_IP}`; manifest đã sửa
+để shell mở rộng biến và pod giữ `Ready`, restart count 0.
+
+### 7.4. HDFS và integration
+
+HDFS dùng một NameNode + một DataNode, replication factor 1. `dfsadmin report`
+xác nhận `Live datanodes (1)`, không corrupt/missing/under-replicated block.
+Bootstrap tạo sáu thư mục data lake. HDFS smoke test upload/list/cat JSONL,
+so SHA-256 byte-for-byte; test persistence recreate NameNode và đọc lại cùng
+file thành công.
+
+Integration smoke tạo 100 normal event có schema hợp lệ, gửi và đọc Kafka với
+key `card_id_hash`, rồi lưu cùng JSONL vào HDFS. Artefact runtime:
+
+| Artefact | Giá trị kiểm tra |
 |---|---|
-| Simulator + data contract | Đã có |
-| Kubernetes + Kafka + Cassandra | Đã có |
-| HDFS | Chưa có implementation |
-| Spark batch, Spark streaming, ML model, dashboard | Chưa có |
+| HDFS raw file | `/fraud-data/raw/integration_83721287ecfe.jsonl` |
+| Số event | 100, schema valid |
+| SHA-256 | `ea121af95b59aa9517b0587004b820b9995fdd4a768189fcd964dba235f68187` |
+| HDFS smoke checksum | `2acff3efb3fd5171336c4edafe51ec659b7c1a6426a3040355eac3c7b58aa881` |
 
-## 4. Kết quả W1
+### 7.5. Tái lập và review chéo
 
-### 4.1. Data contract và chất lượng dữ liệu
+`make reproduce` đã chạy thành công trên Kind: kiểm tra toolchain, preflight,
+deploy, bootstrap, full Bash verifier và integration. Lần chạy tạo thêm
+`/fraud-data/raw/integration_8ff18fcefdae.jsonl`. `verify_infra.sh` và
+`verify_infra.ps1` đều kiểm tra platform, Cassandra, Kafka và HDFS.
 
-Đã định nghĩa transaction event v1 gồm 12 trường như `transaction_id`,
-`event_time` UTC, `card_id_hash`, `amount`, `device_id_hash`,
-`transaction_status`.
+Review chéo kỹ thuật đã kiểm tra runtime/manifests/scripts, tìm và sửa liveness
+probe Cassandra, hard gate DataNode cho HDFS và mở rộng verifier. Chi tiết:
+[`week_2_cross_review.md`](week_2_cross_review.md).
 
-- `transaction_id`: idempotency key để deduplicate.
-- `card_id_hash`: Kafka key để giữ hành vi một thẻ trong cùng partition.
-- Toàn bộ định danh nhạy cảm là synthetic SHA-256 hash.
-- Thứ tự phân loại: `invalid -> duplicate -> late -> valid`.
-- Watermark khởi điểm: 10 phút; `amount <= 0` là invalid.
-
-Nguồn: [data_dictionary.md](data_dictionary.md).
-
-### 4.2. EDA dữ liệu thật
-
-EDA ULB Credit Card Fraud Detection đã cho các kết quả sau:
-
-| Chỉ số | Giá trị |
-|---|---:|
-| Số giao dịch | 284,807 |
-| Fraud | 492 |
-| Fraud rate | 0.173% |
-| Non-fraud : fraud | khoảng 578 : 1 |
-| Duplicate hoàn toàn | 1,081 |
-| Missing value | 0 |
-
-Kết luận: accuracy không đủ cho fraud detection; dùng Precision, Recall,
-F1, PR-AUC, FPR. Amount lệch phải mạnh nên cần feature tương đối/lịch sử,
-không chỉ ngưỡng amount tuyệt đối. Đã có sáu biểu đồ cho imbalance, amount,
-fraud rate theo amount/thời gian, boxplot và correlation.
-
-Nguồn: [eda_report.md](eda_report.md) và [EDA notebook](../notebooks/eda_ulb.ipynb).
-
-### 4.3. Feature v1
-
-Đã đặc tả `tx_count_5m`, `amount_sum_1h`, `failed_tx_count_10m`,
-`unique_cards_per_device_1h`, `amount_vs_avg_7d`, `is_new_merchant`,
-`is_new_country`. Mỗi feature có key, event-time window, cold-start,
-batch/streaming feasibility và kiểm tra data leakage.
-
-Nguyên tắc: không dùng label, dữ liệu tương lai hoặc thông tin hậu giao dịch;
-chia train/validation/test theo thời gian. Nguồn: [feature_v1.md](feature_v1.md).
-
-### 4.4. Simulator và test W1 — đã chạy
-
-Mã nguồn: `data-generator/producer.py`, `scenarios.py`, `schema.py`.
-Simulator hỗ trợ năm scenario, `seed`/`rate`/`duration`, JSONL, quality cases
-và gửi Kafka qua `--bootstrap-server`.
-
-Lệnh đã chạy ngày 19/10/2026:
-
-```bash
-python3 data-generator/producer.py \
-  --scenario velocity_fraud --seed 42 --rate 20 --duration 5 \
-  --output out/checkpoint_velocity.jsonl \
-  --quality-output out/checkpoint_quality.jsonl
-python3 scripts/check_simulator_plausibility.py \
-  --file out/checkpoint_velocity.jsonl --expect velocity_fraud
-```
-
-Kết quả: 108 event hợp lệ; không lỗi JSON/duplicate; `max(tx_count_5m) = 8`;
-plausibility checker `PASS`. Toàn bộ test hiện có: **27 passed**.
-
-## 5. Kết quả W2
-
-### 5.1. Kubernetes platform — đã có
-
-- Kind cluster `fraudstream-cluster`, namespace `fraudstream`.
-- Kubernetes 1.34.11 đã pin trong config.
-- ResourceQuota, LimitRange, Bash/PowerShell preflight.
-- Preflight kiểm tra Docker, node, CoreDNS, StorageClass `standard`, PVC
-  `Bound`, mount và read/write qua pod tạm.
-
-### 5.2. Kafka — đã có và đã chạy thực tế
-
-- Kafka 3.9.1 KRaft, một broker/controller, StatefulSet và PVC 5 GiB.
-- Service nội bộ: `kafka.fraudstream.svc.cluster.local:9092`.
-- Bốn topic: `transactions_raw`, `transactions_invalid`, `fraud_alerts`,
-  `fraud_feedback`.
-- Bootstrap idempotent, có health probes và smoke test.
-
-Evidence runtime: pod/PVC healthy; gửi-đọc đúng 100 event; JSON/schema/key
-hợp lệ; dữ liệu còn nguyên sau recreate broker/client trên cùng PVC/PV.
-
-### 5.3. Cassandra — đã có evidence smoke test
-
-- Single-node StatefulSet, PVC 5 GiB, service nội bộ, readiness/liveness probe.
-- Keyspace `fraudstream`; bảng `transaction_risk`, `fraud_alert`.
-- Khoá truy vấn: `PRIMARY KEY ((card_id_hash), event_time, transaction_id)`.
-- Đã có evidence node `UN`, CQL bootstrap, insert/select `APPROVE` + `BLOCK`,
-  persistence sau recreate pod.
-
-### 5.4. Cải thiện chất lượng W2
-
-1. Pin Kind theo phiên bản môi trường Kafka đã kiểm thử; bỏ port mapping thừa.
-2. Preflight không còn coi PVC `Pending` là pass.
-3. Full verifier fail khi thiếu CoreDNS, Cassandra schema/query, HDFS NameNode
-   hoặc các HDFS path bắt buộc.
-4. Xóa Secret Cassandra mẫu có password hard-code nhưng không được dùng.
-5. Cassandra smoke test kiểm tra đủ hai transaction và hai quyết định nghiệp vụ.
-
-### 5.5. W2 chưa hoàn tất
-
-| Hạng mục | Trạng thái |
-|---|---|
-| HDFS NameNode/DataNode/PVC | Chưa có |
-| Data lake layout, I/O, checksum, persistence | Chưa có |
-| Full `verify_infra` | Chưa pass vì thiếu HDFS |
-| Review chéo W2 | Chưa hoàn tất |
-
-Không trình bày HDFS/full pipeline như đã chạy; log HDFS cũ chỉ là mẫu, không
-phải evidence nghiệm thu.
-
-## 6. Tiến độ
+## 8. Tiến độ, phạm vi và giới hạn
 
 | Gói công việc | Trạng thái |
 |---|---|
 | W1: architecture, contract, EDA, feature, simulator | Hoàn thành |
-| Kubernetes, Kafka, Cassandra | Hoàn thành, có evidence |
-| HDFS và full W2 verification | Chưa hoàn thành |
-| Spark batch/streaming, ML, dashboard | Chưa bắt đầu |
+| W2: Kubernetes, Kafka, HDFS, Cassandra và integration | Hoàn thành, có runtime evidence |
+| Batch Spark raw → Parquet | Chưa triển khai; contract/fixture đã có |
+| Streaming scoring, model ML, alert UI/dashboard | Chưa triển khai |
 
-## 7. Kịch bản checkpoint 1
+Giới hạn cần nói thẳng trong checkpoint:
 
-1. Bài toán và lý do dùng data thật + simulator — 1–2 phút.
-2. Lambda architecture và vai trò Kafka/HDFS/Cassandra/Spark — 1 phút.
-3. EDA: show class imbalance, amount distribution, fraud rate theo amount — 2 phút.
-4. Data contract + feature v1, nhấn mạnh anti-leakage — 2 phút.
-5. Demo simulator `velocity_fraud`, mở JSONL và checker PASS — 2 phút.
-6. Show Kafka 100-event/persistence và Cassandra CQL evidence — 2 phút.
-7. Nêu HDFS là blocker cho end-to-end, sau đó là batch pipeline — 1 phút.
+1. HDFS/Kafka/Cassandra hiện một node, RF=1; chỉ phù hợp local demo.
+2. Persistence chỉ chứng minh qua pod recreate trong cùng Kind cluster; không
+   chứng minh chịu mất node, mất cluster hay HA.
+3. Simulator xác minh pipeline, không xác minh chất lượng dự đoán fraud.
+4. Spark/model/dashboard là roadmap, không trình bày như deliverable đã có.
 
-Không cuộn toàn bộ source. Chỉ show `producer.py` (CLI/Kafka key),
-`kafka.yaml` (StatefulSet/PVC/Service), `02-smoke-test.cql` (query key) và
-log PASS ngắn.
+## 9. Gợi ý trình bày checkpoint 1
 
-## 8. Lệnh demo
+1. **Bài toán và dữ liệu** (1.5 phút): fraud hiếm, vì sao cần Precision/
+   Recall/PR-AUC; data thật bổ sung simulator thế nào.
+2. **Data contract và quality** (1.5 phút): 12 trường, event-time,
+   idempotency key, anti-leakage.
+3. **Lambda Architecture** (2 phút): đi theo sơ đồ, giải thích rõ Kafka/HDFS/
+   Cassandra khác nhau ra sao; đánh dấu phần Spark là roadmap.
+4. **W1 proof** (1.5 phút): EDA plots, feature v1, simulator velocity output.
+5. **W2 proof** (2.5 phút): 4 pods/PVC Bound, Kafka 100 events, HDFS checksum
+   và Cassandra `UN`; chỉ show snippet log ngắn.
+6. **Kết luận và next step** (1 phút): batch raw→Parquet, rồi streaming
+   scoring/model/dashboard.
+
+Không cuộn toàn bộ source. Nên mở đúng bốn vị trí: `producer.py` (schema/key),
+`kafka.yaml` (StatefulSet/PVC/Service), HDFS raw file/checksum và CQL query
+`transaction_risk` theo partition key.
+
+## 10. Lệnh kiểm thử và output thực tế
+
+Tất cả lệnh kiểm tra được gom tại đây. Chạy từ root repository. `make
+reproduce` cần Docker Desktop, Kind, kubectl, Make và Python 3; nó tạo/tái sử
+dụng cluster rồi chạy toàn bộ luồng W2 không-persistence. `make persistence`
+chạy riêng các restart test vì mất nhiều thời gian hơn.
+
+### 10.1. W1 — unit/integration test và simulator
 
 ```bash
 python3 -m pytest tests -q
-python3 data-generator/producer.py --scenario velocity_fraud --seed 42 \
-  --rate 20 --duration 5 --output out/velocity.jsonl
+python3 data-generator/producer.py \
+  --scenario velocity_fraud --seed 42 --rate 20 --duration 5 \
+  --output out/checkpoint_velocity_20261025.jsonl \
+  --quality-output out/checkpoint_quality_20261025.jsonl
 python3 scripts/check_simulator_plausibility.py \
-  --file out/velocity.jsonl --expect velocity_fraud
-
-# Khi cluster đã chạy
-bash infra/kafka/bootstrap_topics.sh
-python3 infra/kafka/smoke_test.py --test-persistence
-bash infra/cassandra/smoke_test.sh --test-persistence
+  --file out/checkpoint_velocity_20261025.jsonl --expect velocity_fraud
 ```
 
-## 9. Tài liệu nguồn
+Output chạy ngày 25/10/2026:
+
+```text
+30 passed, 1 warning
+Generated 108 valid velocity_fraud events -> out/checkpoint_velocity_20261025.jsonl
+"n_lines_parsed": 108, "n_valid": 108, "n_invalid": 0
+"duplicate_transaction_ids": 0, "out_of_order_events": 0
+"count_5m": 8, "n_flagged": {"count_5m": 1}
+[PASS] expect=velocity_fraud
+```
+
+Ý nghĩa: code W1 có 30 test pass; simulator sinh được 108 event hợp schema,
+không duplicate/out-of-order, và tạo đúng tín hiệu velocity fraud (ít nhất một
+thẻ có 8 giao dịch trong 5 phút, vượt ngưỡng 5).
+
+### 10.2. W2 — tái lập toàn bộ nền tảng
+
+```bash
+make reproduce
+make status
+```
+
+Output rút gọn của lần chạy thực tế:
+
+```text
+PASS: Docker, kind, kubectl and Python are available.
+PASS: Kind cluster fraudstream-cluster already exists.
+Preflight Check PASSED! Cluster is ready for workloads.
+pod/cassandra-0       1/1 Running
+pod/kafka-0           1/1 Running
+pod/hdfs-namenode-0   1/1 Running
+pod/hdfs-datanode-0   1/1 Running
+4 PVC: Bound (Cassandra 5Gi, Kafka 5Gi, NameNode 5Gi, DataNode 8Gi)
+```
+
+Ý nghĩa: cùng một entry point có thể dựng/tái sử dụng cluster, cấp stateful
+storage và đưa toàn bộ thành phần W2 về trạng thái sẵn sàng.
+
+### 10.3. W2 — kiểm tra từng service, persistence và end-to-end
+
+```bash
+bash infra/cassandra/smoke_test.sh --test-persistence
+python3 infra/kafka/smoke_test.py --test-persistence
+bash infra/hdfs/smoke_test.sh --test-persistence
+bash infra/scripts/verify_infra.sh
+pwsh -NoProfile -File infra/scripts/verify_infra.ps1 -PythonCommand python3
+python3 infra/scripts/integration_smoke.py
+make persistence
+```
+
+Output rút gọn đã ghi nhận trong lần nghiệm thu:
+
+```text
+Cassandra: node UN; APPROVE + BLOCK được select lại sau pod recreate.
+Kafka run f9069943f05a: sent=100, received=100, JSON/schema/key=true,
+  persistence.passed=true; broker/client UID đổi, PVC/PV giữ nguyên.
+HDFS: Live datanodes (1); 6 paths tồn tại; SHA-256 local = HDFS =
+  2acff3efb3fd5171336c4edafe51ec659b7c1a6426a3040355eac3c7b58aa881.
+Integration: 100 event hợp schema trong integration_83721287ecfe.jsonl,
+  SHA-256 ea121af95b59aa9517b0587004b820b9995fdd4a768189fcd964dba235f68187.
+PowerShell verifier: ghi/đọc lại verify_infra_ps1.json từ HDFS thành công.
+```
+
+Ý nghĩa: đây không chỉ là pod “đang chạy”. Kafka chứng minh producer-consumer
+và persistence; HDFS chứng minh filesystem ghi/đọc bền vững; Cassandra chứng
+minh serving query; integration chứng minh event đi từ simulator qua Kafka tới
+raw data lake mà không mất schema/nội dung.
+
+## 11. Tài liệu nguồn
 
 - [Bài toán và kiến trúc](problem_and_architecture.md)
-- [Tích hợp W1](week1_integration.md)
+- [Data dictionary](data_dictionary.md)
+- [Feature v1](feature_v1.md)
+- [EDA report](eda_report.md)
 - [Mục tiêu/trạng thái W2](week_2_target.md)
 - [Deploy W2](week_2_deployment.md)
 - [Evidence W2](week_2_test_evidence.md)
+- [Review chéo W2](week_2_cross_review.md)
+- [Handoff Kafka/HDFS/batch](batch_streaming_handoff.md)
