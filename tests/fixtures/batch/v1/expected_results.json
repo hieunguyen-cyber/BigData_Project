@@ -1,0 +1,69 @@
+{
+  "fixture_name": "fraudstream_batch_quality_v1",
+  "fixture_version": "1.0.0",
+  "classification_order": [
+    "invalid",
+    "duplicate",
+    "late",
+    "valid"
+  ],
+  "input_count": 4,
+  "counts": {
+    "valid": 1,
+    "invalid": 1,
+    "duplicate": 1,
+    "late": 1
+  },
+  "by_line": [
+    {
+      "line": 1,
+      "transaction_id": "tx_fixture_valid_001",
+      "classification": "valid",
+      "issues": [],
+      "route": "cleaned/curated candidate"
+    },
+    {
+      "line": 2,
+      "transaction_id": "tx_fixture_invalid_001",
+      "classification": "invalid",
+      "issues": [
+        "DQ-02: amount phải là số lớn hơn 0"
+      ],
+      "route": "raw/invalid quarantine; excluded from cleaned/curated"
+    },
+    {
+      "line": 3,
+      "transaction_id": "tx_fixture_valid_001",
+      "classification": "duplicate",
+      "issues": [
+        "DQ-08: transaction_id đã xuất hiện"
+      ],
+      "route": "drop from downstream output; increment duplicate metric"
+    },
+    {
+      "line": 4,
+      "transaction_id": "tx_fixture_late_001",
+      "classification": "late",
+      "issues": [
+        "DQ-09: event_time trễ hơn watermark"
+      ],
+      "route": "late_events; eligible for controlled batch backfill"
+    }
+  ],
+  "expected_output": {
+    "cleaned_candidate_rows": 1,
+    "curated_rows_before_feature_enrichment": 1,
+    "partition_event_date_utc": [
+      "2026-10-04"
+    ],
+    "parquet_compression": "snappy",
+    "partition_column": "event_date"
+  },
+  "anti_leakage_assertions": [
+    "event_date derives only from event_time normalized to UTC",
+    "no fraud label or future fraud_feedback fields exist in the event schema",
+    "history features exclude the current event when specified as historical",
+    "future event_time rows must not contribute to features at time t",
+    "train-only fitted transforms must not be fit on validation/test data"
+  ]
+}
