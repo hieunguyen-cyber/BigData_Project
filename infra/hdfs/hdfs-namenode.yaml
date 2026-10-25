@@ -1,0 +1,256 @@
+# Owner: Lê Trọng Đạt — W2-03 / W3-01
+# HDFS NameNode: ConfigMap, Services và StatefulSet
+# Namespace: fraudstream
+#
+# Thứ tự apply:
+#   kubectl apply -f infra/hdfs/hdfs-namenode.yaml
+#   kubectl apply -f infra/hdfs/hdfs-datanode.yaml
+#
+# Quyết định thiết kế:
+#   - Image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+#     Hỗ trợ cấu hình qua env var CORE_CONF_* / HDFS_CONF_*, có entrypoint
+#     xử lý nhiều chi tiết khởi động Hadoop.
+#   - initContainer "namenode-format": giải quyết vấn đề PVC-mount.
+#     Khi PVC được mount lần đầu, thư mục /hadoop/dfs/name TỒN TẠI (do kernel
+#     tạo điểm mount) nhưng RỖNG. Entrypoint bde2020 kiểm tra sự tồn tại của
+#     thư mục (không phải trạng thái đã format), nên sẽ bỏ qua format và
+#     NameNode sẽ lỗi khi không tìm thấy metadata.
+#     InitContainer kiểm tra /hadoop/dfs/name/current (được tạo sau khi format
+#     thành công). Nếu chưa có → format. Nếu có → bỏ qua. Idempotent.
+#   - PVC (không dùng emptyDir): metadata NameNode tồn tại qua restart pod.
+#   - Service hdfs-namenode-headless: DNS ổn định cho StatefulSet pod
+#     (hdfs-namenode-0.hdfs-namenode-headless.fraudstream.svc.cluster.local).
+#   - Service hdfs-namenode (ClusterIP): endpoint cho DataNode và Spark jobs:
+#     hdfs-namenode.fraudstream.svc.cluster.local:9000
+#   - Tắt ip-hostname-check: tránh lỗi đăng ký DataNode trong môi trường K8s
+#     khi hostname của pod không resolve đúng với IP đã đăng ký.
+#   - Label app=hdfs-namenode: tương thích với selector đầu tiên của
+#     verify_infra.sh; label app.kubernetes.io/component=namenode tương thích
+#     với selector thứ hai.
+
+---
+# ConfigMap: cấu hình Hadoop dùng chung cho NameNode và DataNode.
+# DataNode tham chiếu ConfigMap này qua envFrom.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hdfs-config
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: hdfs
+    app.kubernetes.io/part-of: fraudstream
+data:
+  # Tên cluster — dùng trong hdfs namenode -format <CLUSTER_NAME>
+  CLUSTER_NAME: "fraudstream"
+
+  # core-site.xml: địa chỉ NameNode dùng DNS nội bộ K8s (không hard-code IP)
+  CORE_CONF_fs_defaultFS: "hdfs://hdfs-namenode.fraudstream.svc.cluster.local:9000"
+  CORE_CONF_hadoop_http_staticuser_user: "root"
+
+  # hdfs-site.xml: thư mục lưu metadata và data
+  HDFS_CONF_dfs_namenode_name_dir: "file:///hadoop/dfs/name"
+  HDFS_CONF_dfs_datanode_data_dir: "file:///hadoop/dfs/data"
+
+  # Replication factor = 1 cho local demo 1 DataNode
+  HDFS_CONF_dfs_replication: "1"
+
+  # Tắt kiểm tra quyền — đơn giản hóa cho local demo
+  HDFS_CONF_dfs_permissions_enabled: "false"
+
+  # Bật WebHDFS — cần cho Web UI và một số client
+  HDFS_CONF_dfs_webhdfs_enabled: "true"
+
+  # Tắt ip-hostname-check: trong K8s pod hostname không luôn resolve đúng
+  # với IP đã đăng ký → DataNode sẽ bị từ chối nếu bật check này.
+  # Quy tắc bde2020: ___ (triple underscore) → - (hyphen) trong property name.
+  # HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check
+  #   → dfs.namenode.datanode.registration.ip-hostname-check
+  HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check: "false"
+
+---
+# Service Headless: cung cấp DNS ổn định cho StatefulSet pod.
+# publishNotReadyAddresses: true để DataNode có thể resolve NameNode
+# ngay trong quá trình khởi động (trước khi readiness probe pass).
+apiVersion: v1
+kind: Service
+metadata:
+  name: hdfs-namenode-headless
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: hdfs-namenode
+    app.kubernetes.io/part-of: fraudstream
+    app.kubernetes.io/component: namenode
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/component: namenode
+  ports:
+    - name: rpc
+      port: 9000
+      targetPort: 9000
+    - name: web
+      port: 9870
+      targetPort: 9870
+
+---
+# Service ClusterIP: endpoint chính cho DataNode, smoke test, và Spark jobs.
+# DNS: hdfs-namenode.fraudstream.svc.cluster.local:9000
+apiVersion: v1
+kind: Service
+metadata:
+  name: hdfs-namenode
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: hdfs-namenode
+    app.kubernetes.io/part-of: fraudstream
+    app.kubernetes.io/component: namenode
+spec:
+  selector:
+    app.kubernetes.io/component: namenode
+  ports:
+    - name: rpc
+      port: 9000
+      targetPort: 9000
+    - name: web
+      port: 9870
+      targetPort: 9870
+
+---
+# StatefulSet: HDFS NameNode
+# serviceName tham chiếu headless service để pod có DNS ổn định.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hdfs-namenode
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: hdfs-namenode
+    app.kubernetes.io/part-of: fraudstream
+    app.kubernetes.io/component: namenode
+spec:
+  serviceName: hdfs-namenode-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: namenode
+  template:
+    metadata:
+      labels:
+        # app=hdfs-namenode: tương thích selector đầu tiên của verify_infra.sh
+        app: hdfs-namenode
+        app.kubernetes.io/name: hdfs-namenode
+        app.kubernetes.io/part-of: fraudstream
+        app.kubernetes.io/component: namenode
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      # -----------------------------------------------------------------------
+      # initContainer: xử lý format NameNode lần đầu trên PVC mới.
+      #
+      # Vấn đề: khi PVC được mount tại /hadoop/dfs/name, kernel tạo thư mục
+      # mount point → thư mục TỒN TẠI nhưng RỖNG. Entrypoint bde2020 kiểm tra
+      # `[ ! -d /hadoop/dfs/name ]` → false → bỏ qua format → NameNode khởi
+      # động với metadata rỗng → lỗi.
+      #
+      # Giải pháp: initContainer kiểm tra /hadoop/dfs/name/current (thư mục
+      # chỉ tồn tại sau khi format thành công). Nếu chưa có → format bằng
+      # `-force` (không hỏi xác nhận). Nếu có → bỏ qua. Idempotent qua restart.
+      # -----------------------------------------------------------------------
+      initContainers:
+        - name: namenode-format
+          image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              NAMEDIR=/hadoop/dfs/name
+              if [ ! -d "${NAMEDIR}/current" ]; then
+                echo "[namenode-format] Thư mục ${NAMEDIR}/current chưa tồn tại."
+                echo "[namenode-format] Format NameNode với cluster name: ${CLUSTER_NAME}"
+                # -force: không hỏi xác nhận (cần thiết khi không có TTY)
+                hdfs namenode -format "${CLUSTER_NAME}" -force
+                echo "[namenode-format] Format hoàn thành."
+              else
+                echo "[namenode-format] NameNode đã được format tại ${NAMEDIR}/current — bỏ qua."
+              fi
+          envFrom:
+            - configMapRef:
+                name: hdfs-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          volumeMounts:
+            - name: hdfs-namenode-data
+              mountPath: /hadoop/dfs/name
+
+      containers:
+        - name: namenode
+          image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: hdfs-config
+          ports:
+            - name: rpc
+              containerPort: 9000
+            - name: web
+              containerPort: 9870
+          resources:
+            requests:
+              cpu: 300m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1280Mi
+          # startupProbe: cho NameNode đủ thời gian khởi động JVM + tải metadata
+          startupProbe:
+            tcpSocket:
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
+          # readinessProbe: dùng Web UI (port 9870) — đơn giản và đáng tin cậy
+          # hơn RPC check cho local demo.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9870
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          # livenessProbe: TCP check trên RPC port
+          livenessProbe:
+            tcpSocket:
+              port: 9000
+            initialDelaySeconds: 90
+            periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:
+            # PHẢI dùng PVC, không dùng emptyDir.
+            # /hadoop/dfs/name chứa toàn bộ metadata HDFS (fsimage, edits).
+            # Mất thư mục này = mất toàn bộ namespace HDFS.
+            - name: hdfs-namenode-data
+              mountPath: /hadoop/dfs/name
+
+  # PVC template: tạo tự động cho hdfs-namenode-0.
+  # StorageClass: standard (Kind local-path provisioner).
+  # Dữ liệu tồn tại qua pod restart; bị xóa khi `kind delete cluster`.
+  volumeClaimTemplates:
+    - metadata:
+        name: hdfs-namenode-data
+        labels:
+          app.kubernetes.io/name: hdfs-namenode
+          app.kubernetes.io/part-of: fraudstream
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 5Gi
