@@ -1,4 +1,4 @@
-# Checkpoint 1 — FraudStream: W1 và W2
+# Checkpoint 1 — FraudStream: W1 - W3
 
 > Cập nhật 25/10/2026. Tài liệu này là nguồn nội dung cho checkpoint 1. Mỗi
 > kết quả được phân biệt rõ giữa **đã chạy có output**, **đã có mã/tài liệu**
