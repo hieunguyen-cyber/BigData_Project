@@ -27,10 +27,10 @@ trực tiếp để trình bày.
 |---|---|---|
 | `infra/hdfs/` | NameNode, DataNode, Service, PVC, layout bootstrap, smoke test | Lê Trọng Đạt |
 | `infra/scripts/verify_infra.*` | HDFS theo manifests thật; full verification PASS | Nguyễn Trung Hiếu |
-| `docs/batch_streaming_handoff.md` | Contract Kafka -> HDFS -> batch; invalid/duplicate/late routing | Nguyễn Trung Hiếu |
-| `docs/batch_pipeline_v1.md` | Raw -> cleaned -> curated Parquet và acceptance metrics | Phạm Trung Hiếu |
+| `docs/week_3/batch_streaming_handoff.md` | Contract Kafka -> HDFS -> batch; invalid/duplicate/late routing | Nguyễn Trung Hiếu |
+| `docs/week_3/batch_pipeline_v1.md` | Raw -> cleaned -> curated Parquet và acceptance metrics | Phạm Trung Hiếu |
 | Fixture batch versioned | Valid, invalid, duplicate, late events | Phạm Trung Hiếu |
-| `docs/checkpoint_1.md` | Báo cáo W1+W2, demo outline, evidence đã rà soát | Nguyễn Trung Hiếu |
+| `docs/checkpoints/checkpoint_1.md` | Báo cáo W1+W2, demo outline, evidence đã rà soát | Nguyễn Trung Hiếu |
 | W2 deployment/evidence docs | HDFS/full verification evidence thật | Đạt + Nguyễn Trung Hiếu |
 
 ## 3. Phân công chi tiết

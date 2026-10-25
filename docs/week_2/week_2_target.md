@@ -29,7 +29,7 @@ kiện: script xác minh đầy đủ phải trả lỗi cho đến khi hạng m
 | W2-03 | Hoàn thành | NameNode/DataNode Ready; hai PVC 5 GiB/8 GiB Bound; bootstrap tạo 6 paths; JSONL I/O/SHA-256 và persistence qua NameNode recreate đều PASS trên Kind. | `infra/hdfs/`, mục 5 `week_2_test_evidence.md` |
 | W2-04 | Hoàn thành | Cassandra StatefulSet, PVC 5 GiB, Service nội bộ, probes, CQL bootstrap và smoke test insert/select/persistence. | `infra/cassandra/`, mục 3 của `week_2_test_evidence.md` |
 | W2-05 | Hoàn thành | Bash và PowerShell verifier đã chạy trên cluster Kind có đủ 4 workload; kiểm tra platform, Cassandra, Kafka, NameNode/DataNode, 2 HDFS PVC, 6 paths và HDFS I/O đều PASS. | `infra/scripts/verify_infra.*`, mục 5 evidence |
-| W2-06 | Hoàn thành | Có deploy, verify, teardown, troubleshooting, Makefile tái lập và review chéo kỹ thuật có evidence runtime cập nhật 25/10/2026. Review/acknowledge nội bộ của các owner vẫn là hoạt động nhóm tiếp theo. | `docs/week_2_deployment.md`, `docs/week_2_test_evidence.md`, `docs/week_2_cross_review.md`, `Makefile` |
+| W2-06 | Hoàn thành | Có deploy, verify, teardown, troubleshooting, Makefile tái lập và review chéo kỹ thuật có evidence runtime cập nhật 25/10/2026. Review/acknowledge nội bộ của các owner vẫn là hoạt động nhóm tiếp theo. | `docs/week_2/week_2_deployment.md`, `docs/week_2/week_2_test_evidence.md`, `docs/week_2/week_2_cross_review.md`, `Makefile` |
 
 ### Các cải tiến đã áp dụng cho phần đã có
 
@@ -90,8 +90,8 @@ Tuần này chỉ dựng nền tảng và chứng minh kết nối/durability c�
 | `infra/kind/` hoặc `infra/minikube/` | Cluster config, namespace, preflight, resource prerequisites | Lê Xuân Nhật Khôi |
 | `infra/cassandra/` | StatefulSet/Helm values, PVC, CQL bootstrap và Cassandra smoke test | Lê Xuân Nhật Khôi |
 | `infra/scripts/verify_infra.sh` | Kiểm tra cluster, pod, PVC, Kafka, HDFS, Cassandra | Cả ba |
-| `docs/week_2_deployment.md` | Hướng dẫn cài đặt, deploy, verify, teardown, troubleshooting | Cả ba |
-| `docs/week_2_test_evidence.md` | Bằng chứng smoke test, version, resource footprint, limitations | Cả ba |
+| `docs/week_2/week_2_deployment.md` | Hướng dẫn cài đặt, deploy, verify, teardown, troubleshooting | Cả ba |
+| `docs/week_2/week_2_test_evidence.md` | Bằng chứng smoke test, version, resource footprint, limitations | Cả ba |
 
 ## 5. Phân công chi tiết
 
@@ -236,4 +236,4 @@ Tuần 2 hoàn thành khi một thành viên mới có thể, chỉ dựa vào r
 4. Gửi transaction event vào Kafka, lưu/đọc file từ HDFS, và insert/select một risk record trong Cassandra.
 5. Restart một client pod mà không mất dữ liệu đã ghi trên persistent storage.
 
-Kết quả smoke test, resource footprint và giới hạn local phải được ghi trong `docs/week_2_test_evidence.md`.
+Kết quả smoke test, resource footprint và giới hạn local phải được ghi trong `docs/week_2/week_2_test_evidence.md`.

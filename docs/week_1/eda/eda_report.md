@@ -180,7 +180,7 @@ và *device sharing theo IP* **không thể kiểm chứng bằng dữ liệu th
 | `is_new_merchant`, `is_new_country` | Hành vi lạ so với lịch sử | Simulator |
 | `hour_of_day` | Fraud rate theo giờ (6.4); cần giờ địa phương thật | Simulator, IEEE-CIS (sau khi chọn mốc gốc) |
 
-Đặc tả đầy đủ, công thức và kiểm tra leakage: xem `docs/feature_v1.md`.
+Đặc tả đầy đủ, công thức và kiểm tra leakage: xem `feature_v1.md`.
 
 ## 9. Giới hạn dữ liệu
 

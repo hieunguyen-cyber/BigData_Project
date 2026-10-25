@@ -30,6 +30,44 @@ là chứng minh nhóm đã hiểu bài toán, chuẩn hóa event, có simulator
 cho hai mục đích khác nhau và đã dựng nền tảng dữ liệu có thể nhận-lưu-kiểm tra
 sự kiện một cách tái lập.
 
+### 1.1. Bài toán nghiệp vụ được giải quyết như thế nào?
+
+Một giao dịch online xuất hiện trước khi tổ chức biết chắc nó có phải fraud hay
+không. Vì vậy hệ thống chỉ được dùng tín hiệu quan sát được tại thời điểm giao
+dịch, không được dùng chargeback hay kết quả điều tra đến sau đó. Mục tiêu là
+giảm tổn thất fraud nhưng cũng tránh chặn nhầm khách hàng hợp lệ:
+
+1. Client/payment gateway phát sinh transaction event.
+2. Pipeline kiểm tra schema, ràng buộc và bản phát lại; record không đạt bị
+   quarantine, không được tính feature/score.
+3. Với record hợp lệ, speed layer sẽ dùng lịch sử có trước `event_time` để
+   tính velocity, failed transaction, device sharing và amount bất thường.
+4. Rule engine/model (milestone sau) trả `risk_score` và `APPROVE`, `REVIEW`
+   hoặc `BLOCK`. `REVIEW` là vùng cân bằng khi bằng chứng chưa đủ để block.
+5. Chargeback/manual review tạo feedback đến trễ cho đánh giá và train lại;
+   feedback không được quay lại làm feature cho chính giao dịch đã score.
+
+Fraud rất hiếm nên accuracy không đủ ý nghĩa: model luôn `APPROVE` vẫn có thể
+có accuracy cao nhưng bỏ sót phần lớn fraud. Giai đoạn model sẽ đánh giá
+Precision, Recall, F1, PR-AUC, False Positive Rate và latency event-to-decision.
+
+### 1.2. Danh mục sự kiện và ý nghĩa
+
+| Event / nơi lưu | Khi nào xuất hiện | Ý nghĩa | Dùng để score online? |
+|---|---|---|---|
+| `transactions_raw` | Producer/simulator phát giao dịch | Event 12 field v1 bất biến để audit và replay. | Có, sau validation. |
+| `transactions_invalid` | Sai schema/DQ, ví dụ thiếu field hoặc amount không dương | Quarantine kèm mã lỗi; dùng sửa nguồn và đo chất lượng data. | Không. |
+| Duplicate | `transaction_id` đã xuất hiện | Bản retry/phát lại; loại để không double-count feature và score. | Không. |
+| Late event | Hợp lệ schema nhưng cũ hơn watermark | Giữ riêng để đối soát/backfill, không làm đổi state online tùy tiện. | Không ở luồng đúng hạn. |
+| Valid transaction | Qua validation, unique, trong watermark | Input tin cậy cho window feature và cleaned/curated layer. | Có. |
+| `fraud_alerts` | Streaming layer quyết định `REVIEW`/`BLOCK` | Output cho analyst, dashboard hoặc downstream action. | Là output. |
+| `fraud_feedback` | Chargeback/manual review có nhãn xác nhận | Ground truth đến trễ cho đánh giá, train lại và drift monitoring. | Không dùng cho cùng event. |
+| Cassandra `transaction_risk` | Sau online scoring (roadmap) | Serving record để API truy vấn nhanh score/quyết định theo card/time. | Là output. |
+
+**Invalid, duplicate và late không giống nhau:** invalid là dữ liệu sai;
+duplicate là dữ liệu hợp lệ nhưng bị phát lại; late là dữ liệu hợp lệ đến muộn.
+Tách ba nhánh này giữ được trace, chất lượng số liệu và tính đúng đắn state.
+
 ## 2. Nguồn dữ liệu và simulator
 
 Hai nguồn dữ liệu bổ trợ nhau, không thay thế nhau:
@@ -132,6 +170,40 @@ cho pod để data không mất khi pod bị recreate. Trong demo local, persist
 chỉ được chứng minh qua pod restart cùng Kind cluster; xóa cluster sẽ xóa data
 local.
 
+### 5.1. Cấu hình hiện tại: giá trị, ý nghĩa và lý do chọn
+
+| Thành phần | Cấu hình hiện tại | Ý nghĩa và lý do |
+|---|---|---|
+| Kind | Một control-plane, image Kubernetes `v1.34.11` được pin | Mọi máy tạo cùng K8s version, giảm lỗi khác biệt môi trường. Một node là đủ local demo, không giả định HA. |
+| Namespace/quota | `fraudstream`; request tối đa 4 CPU/8 GiB, limit 8 CPU/12 GiB, tối đa 10 PVC | Cô lập project và chặn workload vượt năng lực laptop trước khi rơi vào Pending/OOM khó chẩn đoán. |
+| Kafka runtime | 1 StatefulSet replica, Kafka 3.9.1, KRaft broker+controller, PVC 5 GiB | KRaft loại ZooKeeper nên ít dependency hơn cho demo. PVC giữ log qua restart; 1 broker không thể replication thật. |
+| Kafka partition | Default 3; raw/alert 3 partition, invalid/feedback 1 partition | Ba partition đủ minh họa key-based partitioning và consumer song song. Invalid/feedback thấp hơn nên 1 partition giảm chi phí. |
+| Kafka retention | Raw/alert 7 ngày; invalid 3 ngày; feedback 30 ngày | Raw đủ replay ngắn; invalid chỉ để sửa nguồn; feedback giữ lâu hơn cho nhãn đến trễ. Đây là policy demo, không phải SLA. |
+| Kafka reliability | Smoke producer `acks=all`; RF=1, `min.insync.replicas=1` | Producer chờ broker xác nhận. RF/ISR bằng 1 là bắt buộc vì chỉ một broker; production cần nhiều broker/RF cao hơn. |
+| Kafka health | Startup TCP 10s × 30; readiness bằng broker API; liveness TCP | Cho JVM/KRaft tối đa khoảng 5 phút; readiness kiểm tra API thật trước khi nhận traffic. |
+| HDFS topology | 1 NameNode + 1 DataNode, Hadoop 3.2.1, `dfs.replication=1` | Mô hình metadata/block/data lake vừa laptop. RF=1 khớp 1 DataNode, tránh block under-replicated. |
+| HDFS storage | NameNode PVC 5 GiB; DataNode PVC 8 GiB | NameNode giữ metadata, DataNode giữ raw/cleaned/curated blocks nên cần lớn hơn; không dùng `emptyDir` để persistence test có ý nghĩa. |
+| HDFS network | NameNode RPC 9000/web 9870 qua ClusterIP DNS; WebHDFS bật | Service DNS không đổi khi pod đổi IP; RPC cho HDFS client, web cho health/UI trong demo. |
+| HDFS probes | Startup tối đa 5 phút; readiness HTTP UI; liveness TCP RPC | HDFS/JVM khởi động chậm nên tránh restart sớm; chỉ nhận traffic khi service sẵn sàng. |
+| Cassandra | Cassandra 4.1, 1 StatefulSet replica, PVC 5 GiB, CQL 9042 | Serving store theo key/time, footprint phù hợp local; không có quorum/HA thật. |
+| Cassandra key | `PRIMARY KEY ((card_id_hash), event_time, transaction_id)` | Partition theo card để query lịch sử nhanh; event time sắp xếp; transaction ID chống va chạm timestamp. |
+| Cassandra resources | Request 300m CPU/1 GiB, limit 1 CPU/1.5 GiB | JVM có baseline memory rõ ràng mà vẫn nằm trong quota laptop. |
+| Data quality | Watermark 10 phút; `invalid → duplicate → late → valid` | Watermark là điểm bắt đầu dễ giải thích, sẽ tuning bằng event delay thật; thứ tự bảo đảm một record chỉ có một outcome. |
+| Python/test | Python 3.12.7, dependency pin version, pytest, seed 42 | Tái lập môi trường và output; seed cố định giúp scenario test không flaky. |
+
+### 5.2. Các giới hạn cấu hình local cần nói thẳng
+
+- Một replica, RF=1 và HDFS replication=1 giúp chạy vừa laptop nhưng không
+  chịu được mất node. Production cần nhiều broker/DataNode/Cassandra node,
+  anti-affinity, replication, backup và disaster recovery.
+- Kafka dùng `PLAINTEXT`, HDFS tắt permission check trong namespace học tập để
+  giảm phức tạp checkpoint. Production cần TLS/SASL, ACL, secret management,
+  network policy, authentication, authorization, audit và encryption.
+- PVC 5–8 GiB và retention hiện tại là dung lượng demo. Production phải tính
+  theo throughput, retention, replication, growth, RPO/RTO và ngân sách.
+- Watermark 10 phút không phải hằng số nghiệp vụ; cần đo delay thực tế rồi cân
+  bằng data completeness với độ trễ ra quyết định.
+
 ### Endpoint và storage contract quan trọng
 
 | Thành phần | Endpoint/path | Hợp đồng sử dụng |
@@ -220,7 +292,7 @@ deploy, bootstrap, full Bash verifier và integration. Lần chạy tạo thêm
 
 Review chéo kỹ thuật đã kiểm tra runtime/manifests/scripts, tìm và sửa liveness
 probe Cassandra, hard gate DataNode cho HDFS và mở rộng verifier. Chi tiết:
-[`week_2_cross_review.md`](week_2_cross_review.md).
+[`week_2_cross_review.md`](../week_2/week_2_cross_review.md).
 
 ## 8. Tiến độ, phạm vi và giới hạn
 
@@ -353,5 +425,5 @@ raw data lake mà không mất schema/nội dung.
 - [Mục tiêu/trạng thái W2](week_2_target.md)
 - [Deploy W2](week_2_deployment.md)
 - [Evidence W2](week_2_test_evidence.md)
-- [Review chéo W2](week_2_cross_review.md)
+- [Review chéo W2](../week_2/week_2_cross_review.md)
 - [Handoff Kafka/HDFS/batch](batch_streaming_handoff.md)

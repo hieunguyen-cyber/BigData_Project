@@ -9,9 +9,9 @@
 | Deliverable | Owner | Tiêu chí hoàn thành | Trạng thái | Bằng chứng (PR/commit) | Reviewer |
 |---|---|---|---|---|---|
 | `scripts/eda_ulb.py`, `notebooks/eda_ulb.ipynb` | Phạm Trung Hiếu | Chạy lại được từ dữ liệu, cùng SHA-256 ⇒ cùng số liệu | ✅ Hoàn thành | `eda_report.md` mục 10 | NTH |
-| `docs/eda_report.md` + `docs/eda_stats.json` + `docs/figures/` | Phạm Trung Hiếu | ≥ 4 biểu đồ có tiêu đề/nhãn/chú thích/nhận xét; nêu imbalance, missing, duplicate, giới hạn | ✅ Hoàn thành | `eda_stats.json`, 6 PNG | NTH |
-| `docs/feature_v1.md` | Phạm Trung Hiếu | Mỗi feature có nguồn, thời điểm tính, lý do; không leakage | ✅ Review hoàn tất | Mục 6 và 9 của `feature_v1.md` | NTH |
-| `docs/simulator_test.md` | Cả hai | Rule DQ, sample 4 loại event, checklist review | ✅ Hoàn thành | Mục 4, 7, 8 của `simulator_test.md` | NTH/PTH |
+| `docs/week_1/eda/eda_report.md` + `eda_stats.json` + `figures/` | Phạm Trung Hiếu | ≥ 4 biểu đồ có tiêu đề/nhãn/chú thích/nhận xét; nêu imbalance, missing, duplicate, giới hạn | ✅ Hoàn thành | `eda_stats.json`, 6 PNG | NTH |
+| `docs/week_1/eda/feature_v1.md` | Phạm Trung Hiếu | Mỗi feature có nguồn, thời điểm tính, lý do; không leakage | ✅ Review hoàn tất | Mục 6 và 9 của `feature_v1.md` | NTH |
+| `docs/week_1/eda/simulator_test.md` | Cả hai | Rule DQ, sample 4 loại event, checklist review | ✅ Hoàn thành | Mục 4, 7, 8 của `simulator_test.md` | NTH/PTH |
 | `scripts/check_simulator_plausibility.py`, `tests/` | Cả hai | Test phân biệt valid/invalid/duplicate/late và 4 fraud pattern | ✅ 27 passed; 5 scenario PASS checker | `tests/`, `data-generator/` | NTH/PTH |
 
 ## 2. Việc cần làm sau khi nhận gói
@@ -19,7 +19,7 @@
 1. [x] Chuẩn hóa môi trường: `pip install -r requirements.txt`
 2. [x] Tải ULB theo `data/README.md`; chưa tải IEEE-CIS
 3. [x] Chạy pytest và EDA ULB trên PowerShell theo `README_WEEK1.md`
-4. [x] Đọc lại `docs/eda_report.md` và review liên hệ EDA/feature v1
+4. [x] Đọc lại `docs/week_1/eda/eda_report.md` và review liên hệ EDA/feature v1
 5. [x] Ghi fraud rate và giới hạn dữ liệu vào phần metrics/feature v1
 6. [x] Cập nhật `requirements.txt` + README mục 9 với matplotlib/JupyterLab
 7. [x] Review chéo NTH/PTH được ghi trong `feature_v1.md` và `simulator_test.md`
@@ -48,4 +48,4 @@
 ## 5. Chuẩn bị demo cuối tuần
 
 Demo theo Definition of Done: chọn một scenario → tạo event JSON hợp schema → chỉ ra tín hiệu fraud event đó thể hiện → liên hệ feature v1.
-Bảng liên hệ có sẵn ở `docs/simulator_test.md` mục 5. Ví dụ: `velocity_fraud` → `tx_count_5m ≥ 5` → rule velocity → alert `REVIEW`/`BLOCK`.
+Bảng liên hệ có sẵn ở `docs/week_1/eda/simulator_test.md` mục 5. Ví dụ: `velocity_fraud` → `tx_count_5m ≥ 5` → rule velocity → alert `REVIEW`/`BLOCK`.

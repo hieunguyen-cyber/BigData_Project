@@ -1,7 +1,7 @@
 # Dữ liệu cho EDA (không commit lên Git)
 
 `data/raw/` nằm trong `.gitignore`. Mỗi thành viên tự tải dữ liệu; kết quả được kiểm chứng bằng SHA-256 ghi trong
-`docs/eda_report.md` mục 10 và `docs/eda_stats.json` (trường `meta.sha256`).
+`docs/week_1/eda/eda_report.md` mục 10 và `docs/week_1/eda/eda_stats.json` (trường `meta.sha256`).
 
 ## ULB Credit Card Fraud Detection (bắt buộc)
 

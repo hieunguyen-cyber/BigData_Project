@@ -461,7 +461,7 @@ def build_report(stats: dict | None, ieee: dict | None, meta: dict | None) -> st
     return f"""# EDA Report - FraudStream (Tuần 1)
 
 > Owner: Phạm Trung Hiếu · Deliverable W1-03 · Dataset chính: ULB Credit Card Fraud; mapping/mở rộng: IEEE-CIS
-> Báo cáo này được **sinh tự động** bởi `scripts/eda_ulb.py`; mọi số liệu truy vết được qua `docs/eda_stats.json`.
+> Báo cáo này được **sinh tự động** bởi `scripts/eda_ulb.py`; mọi số liệu truy vết được qua `docs/week_1/eda/eda_stats.json`.
 
 {banner}## 1. Mục tiêu và câu hỏi EDA
 
@@ -590,7 +590,7 @@ và *device sharing theo IP* **không thể kiểm chứng bằng dữ liệu th
 | `is_new_merchant`, `is_new_country` | Hành vi lạ so với lịch sử | Simulator |
 | `hour_of_day` | Fraud rate theo giờ (6.4); cần giờ địa phương thật | Simulator, IEEE-CIS (sau khi chọn mốc gốc) |
 
-Đặc tả đầy đủ, công thức và kiểm tra leakage: xem `docs/feature_v1.md`.
+Đặc tả đầy đủ, công thức và kiểm tra leakage: xem `docs/week_1/eda/feature_v1.md`.
 
 ## 9. Giới hạn dữ liệu
 
@@ -648,7 +648,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", type=Path, default=ROOT / "data/raw/creditcard.csv")
     ap.add_argument("--ieee-transaction", type=Path, default=None)
-    ap.add_argument("--docs-dir", type=Path, default=ROOT / "docs")
+    ap.add_argument("--docs-dir", type=Path, default=ROOT / "docs/week_1/eda")
     a = ap.parse_args(argv)
     if not a.data.exists():
         print(f"[LỖI] Không thấy {a.data}. Xem data/README.md để tải ULB creditcard.csv.", file=sys.stderr)

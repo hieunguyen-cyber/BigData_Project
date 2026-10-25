@@ -4,12 +4,12 @@
 
 EDA ULB trên dữ liệu thật: 284.807 giao dịch, 492 fraud (0,1727%), không missing value, 1.081 dòng trùng lặp hoàn toàn. Có 1.825 giao dịch Amount = 0, gồm 27 fraud. Kiểm thử tích hợp Tuần 1: **27 passed**.
 
-- `docs/eda_report.md`: báo cáo, nhận xét, mapping IEEE-CIS và giới hạn dữ liệu.
-- `docs/eda_stats.json`: số liệu, SHA-256 và phiên bản môi trường.
-- `docs/figures/`: 6 biểu đồ PNG; giữ nguyên đường dẫn khi nộp.
-- `docs/feature_v1.md`: công thức, nguồn dữ liệu, thời điểm tính, metrics, leakage và chia tập.
-- `docs/simulator_test.md`: đề xuất data-quality rules và hướng dẫn review simulator.
-- `docs/week1_task_checklist.md`: trạng thái hoàn thành và việc còn chờ phối hợp.
+- `docs/week_1/eda/eda_report.md`: báo cáo, nhận xét, mapping IEEE-CIS và giới hạn dữ liệu.
+- `docs/week_1/eda/eda_stats.json`: số liệu, SHA-256 và phiên bản môi trường.
+- `docs/week_1/eda/figures/`: 6 biểu đồ PNG; giữ nguyên đường dẫn khi nộp.
+- `docs/week_1/eda/feature_v1.md`: công thức, nguồn dữ liệu, thời điểm tính, metrics, leakage và chia tập.
+- `docs/week_1/eda/simulator_test.md`: đề xuất data-quality rules và hướng dẫn review simulator.
+- `docs/week_1/week1_task_checklist.md`: trạng thái hoàn thành và việc còn chờ phối hợp.
 - `scripts/`, `tests/`, `notebooks/eda_ulb.ipynb`: mã để chạy lại và kiểm thử.
 
 ## Chạy trên Windows PowerShell

@@ -1,7 +1,7 @@
 {
   "fixture_name": "fraudstream_batch_quality_v1",
   "fixture_version": "1.0.0",
-  "contract": "docs/data_dictionary.md#transaction-event-v1",
+  "contract": "docs/general/data_dictionary.md#transaction-event-v1",
   "created_for": "Week 3 - Phạm Trung Hiếu / Batch Data-quality Foundation",
   "synthetic_only": true,
   "contains_real_dataset_or_pii": false,

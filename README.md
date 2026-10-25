@@ -2,11 +2,11 @@
 
 # FraudStream - Real-Time Online Payment Fraud Detection
 
-Deliverables Tuần 1: [EDA và hướng dẫn chạy](README_WEEK1.md), [mục tiêu sprint](docs/week_1_target.md), [kiến trúc](docs/problem_and_architecture.md), [data contract](docs/data_dictionary.md), [trạng thái tích hợp](docs/week1_integration.md). Deliverables Tuần 2: [mục tiêu hạ tầng nền](docs/week_2_target.md), [hướng dẫn triển khai](docs/week_2_deployment.md), [bằng chứng kiểm thử](docs/week_2_test_evidence.md). Toàn bộ mã Python dùng chung `requirements.txt` và môi trường chuẩn của nhóm.
+Tài liệu được tổ chức tại [docs/](docs/README.md). Deliverables Tuần 1: [EDA và hướng dẫn chạy](docs/week_1/README.md), [mục tiêu sprint](docs/week_1/week_1_target.md), [kiến trúc](docs/general/problem_and_architecture.md), [data contract](docs/general/data_dictionary.md), [trạng thái tích hợp](docs/week_1/week1_integration.md). Deliverables Tuần 2: [mục tiêu hạ tầng nền](docs/week_2/week_2_target.md), [hướng dẫn triển khai](docs/week_2/week_2_deployment.md), [bằng chứng kiểm thử](docs/week_2/week_2_test_evidence.md). Toàn bộ mã Python dùng chung `requirements.txt` và môi trường chuẩn của nhóm.
 
 Tái lập W2 trên máy khác: cài Docker Desktop, `kind`, `kubectl`, Python 3 và
 chạy `make reproduce`. Chi tiết target và review kỹ thuật nằm tại
-[`docs/week_2_cross_review.md`](docs/week_2_cross_review.md).
+[`docs/week_2/week_2_cross_review.md`](docs/week_2/week_2_cross_review.md).
 
 > Hệ thống phát hiện gian lận giao dịch thanh toán trực tuyến theo thời gian thực, xây dựng theo Lambda Architecture.
 

@@ -5,13 +5,13 @@
 
 ## 1. Purpose and scope
 
-Define a deterministic path from immutable JSONL transaction events to validated, deduplicated, date-partitioned Parquet. This document turns `docs/data_dictionary.md` and `docs/feature_v1.md` into an implementation contract. It does not claim that Spark or HDFS jobs already run.
+Define a deterministic path from immutable JSONL transaction events to validated, deduplicated, date-partitioned Parquet. This document turns `docs/general/data_dictionary.md` and `docs/week_1/eda/feature_v1.md` into an implementation contract. It does not claim that Spark or HDFS jobs already run.
 
 In scope: raw retention, schema/constraint checks, deduplication by `transaction_id`, invalid/duplicate/late routing, Parquet schema, UTC date partitioning, batch metrics, reproducibility, and leakage checks. Model training and online scoring are out of scope.
 
 ## 2. Contract sources and invariants
 
-- Event schema: exactly the 12 required v1 fields documented in `docs/data_dictionary.md`.
+- Event schema: exactly the 12 required v1 fields documented in `docs/general/data_dictionary.md`.
 - `transaction_id` is the idempotency/deduplication key; do not deduplicate on amount/time/card alone.
 - `event_time` is the business/event timestamp. Normalize offset-aware timestamps to UTC for processing; canonical output is UTC. The published contract examples use `Z`. A strict parser should reject timezone-naive timestamps; producers should emit canonical `Z` timestamps.
 - `amount` must be numeric and greater than zero. Extremely large amounts remain valid under DQ-07; do not silently drop them. The threshold and `extreme_amount` flag implementation must be explicitly configured before production use because the current contract does not specify a numeric threshold.
@@ -33,7 +33,7 @@ Use the existing top-level HDFS layout defined by Week 3. Nested directories bel
 | Checkpoints | `/fraud-data/checkpoints/<job_name>/` | Spark checkpoint metadata | Runtime state only; do not treat as business output or delete during normal reruns. |
 | Models | `/fraud-data/models/<model_name>/version=<version>/` | Model artifact + metadata | Immutable, versioned artifacts; include training-data window, feature version, code/config version, and evaluation metrics. |
 
-**Path integration note:** the agreed HDFS foundation lists six roots (`raw`, `cleaned`, `curated`, `late_events`, `checkpoints`, `models`). There is no separate top-level `invalid` root in the current target, so v1 proposes `/fraud-data/raw/invalid/`. The team must align this with `docs/batch_streaming_handoff.md` before wiring sinks. Do not create a seventh top-level path silently.
+**Path integration note:** the agreed HDFS foundation lists six roots (`raw`, `cleaned`, `curated`, `late_events`, `checkpoints`, `models`). There is no separate top-level `invalid` root in the current target, so v1 proposes `/fraud-data/raw/invalid/`. The team must align this with `docs/week_3/batch_streaming_handoff.md` before wiring sinks. Do not create a seventh top-level path silently.
 
 ## 4. Pipeline stages
 
@@ -162,7 +162,7 @@ The test uses a fixed reference processing time and preserves source line order.
 
 ## 10. Week 3 acceptance checklist
 
-- [x] Input contract traces to `docs/data_dictionary.md` (12 fields and DQ rules).
+- [x] Input contract traces to `docs/general/data_dictionary.md` (12 fields and DQ rules).
 - [x] Raw/cleaned/curated/late/checkpoint/model paths and lifecycle defined.
 - [x] Invalid routing defined as a proposed subpath under the existing raw root; cross-owner confirmation flagged.
 - [x] Deduplication key and deterministic conflict behavior specified.

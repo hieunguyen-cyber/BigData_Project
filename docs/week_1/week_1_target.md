@@ -19,12 +19,12 @@ Kết thúc tuần, dự án có một thiết kế thống nhất và một dò
 
 | Deliverable                                 | Nội dung tối thiểu                                                 | Owner               |
 | ------------------------------------------- | --------------------------------------------------------------------- | ------------------- |
-| `docs/problem_and_architecture.md`        | Bài toán, scope, fraud scenarios, sơ đồ Lambda                   | Nguyễn Trung Hiếu |
-| `docs/data_dictionary.md`                 | JSON schema, field definitions, constraints, validation rules         | Nguyễn Trung Hiếu |
-| `docs/eda_report.md` hoặc notebook       | EDA ULB/IEEE-CIS, biểu đồ, nhận xét và feature candidates       | Phạm Trung Hiếu   |
-| `docs/feature_v1.md`                      | Danh sách feature, ý nghĩa và cách tránh data leakage           | Phạm Trung Hiếu   |
+| `docs/general/problem_and_architecture.md`        | Bài toán, scope, fraud scenarios, sơ đồ Lambda                   | Nguyễn Trung Hiếu |
+| `docs/general/data_dictionary.md`                 | JSON schema, field definitions, constraints, validation rules         | Nguyễn Trung Hiếu |
+| `docs/week_1/eda/eda_report.md` hoặc notebook       | EDA ULB/IEEE-CIS, biểu đồ, nhận xét và feature candidates       | Phạm Trung Hiếu   |
+| `docs/week_1/eda/feature_v1.md`                      | Danh sách feature, ý nghĩa và cách tránh data leakage           | Phạm Trung Hiếu   |
 | `data-generator/`                         | Adapter dữ liệu, producer và fraud scenarios                       | Nguyễn Trung Hiếu |
-| `tests/` hoặc `docs/simulator_test.md` | Test schema, invalid/duplicate/late events và hướng dẫn tái lập | Cả hai             |
+| `tests/` hoặc `docs/week_1/eda/simulator_test.md` | Test schema, invalid/duplicate/late events và hướng dẫn tái lập | Cả hai             |
 
 ## 3. Phân công công việc
 

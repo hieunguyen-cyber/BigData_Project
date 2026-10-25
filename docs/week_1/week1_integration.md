@@ -13,10 +13,10 @@ Không còn remote branch nào có thay đổi chưa nằm trong `main` tại th
 
 | Nhóm công việc | Tài liệu / mã nguồn | Kết quả |
 |---|---|---|
-| EDA và ML foundation | `docs/eda_report.md`, `docs/feature_v1.md`, `scripts/eda_ulb.py` | Phân tích ULB, feature v1, metrics và kiểm tra data leakage |
+| EDA và ML foundation | `docs/week_1/eda/eda_report.md`, `docs/week_1/eda/feature_v1.md`, `scripts/eda_ulb.py` | Phân tích ULB, feature v1, metrics và kiểm tra data leakage |
 | Fraud simulator | `data-generator/producer.py`, `data-generator/scenarios.py` | Sinh normal traffic và 4 fraud scenarios với seed tái lập |
-| Data contract | `docs/data_dictionary.md`, `data-generator/schema.py` | Schema 12 trường, validation và phân loại valid/invalid/duplicate/late |
-| System design | `docs/problem_and_architecture.md` | Kiến trúc Lambda, topics, data flow và quyết định kỹ thuật W1 |
+| Data contract | `docs/general/data_dictionary.md`, `data-generator/schema.py` | Schema 12 trường, validation và phân loại valid/invalid/duplicate/late |
+| System design | `docs/general/problem_and_architecture.md` | Kiến trúc Lambda, topics, data flow và quyết định kỹ thuật W1 |
 | Kiểm thử | `tests/`, `scripts/check_simulator_plausibility.py` | 27 tests pass; 5 scenarios vượt qua plausibility checker |
 | Môi trường chung | `requirements.txt`, README mục 9 | Một baseline Python dependency dùng chung cho nhóm |
 

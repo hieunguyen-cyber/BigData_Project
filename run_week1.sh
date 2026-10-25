@@ -17,5 +17,5 @@ else
 fi
 
 echo "== 3/3 Xong =="
-echo "Kiểm tra: docs/eda_report.md, docs/eda_stats.json, docs/figures/*.png"
+echo "Kiểm tra: docs/week_1/eda/eda_report.md, docs/week_1/eda/eda_stats.json, docs/week_1/eda/figures/*.png"
 echo "Tiếp theo: đọc lại nhận xét tự động, bổ sung diễn giải nghiệp vụ nếu cần, rồi mở Pull Request."
