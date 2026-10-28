@@ -227,3 +227,6 @@ data/interim/
 .venv-eda/
 out/
 .DS_Store
+
+# Local LaTeX Workshop / Beamer presentation projects and build artifacts
+slides/
