@@ -7,7 +7,7 @@ PYTHON ?= python3
 KIND_CLUSTER ?= fraudstream-cluster
 NAMESPACE ?= fraudstream
 
-.PHONY: help check-tools cluster platform deploy bootstrap smoke persistence verify integration status test reproduce destroy
+.PHONY: help check-tools cluster platform deploy bootstrap smoke persistence verify integration status test reproduce destroy batch-submit batch-verify
 
 help:
 	@echo "FraudStream W2 reproducibility commands"
@@ -74,6 +74,14 @@ status:
 
 test:
 	@$(PYTHON) -m pytest tests -q
+
+BATCH_ID ?= batch_fixture_v1
+
+batch-submit:
+	@$(PYTHON) scripts/submit_batch.py --batch-id "$(BATCH_ID)"
+
+batch-verify:
+	@$(PYTHON) scripts/verify_batch.py --batch-id "$(BATCH_ID)"
 
 reproduce: bootstrap verify integration
 	@echo "PASS: W2 reproducibility flow completed. Run 'make persistence' for restart tests."

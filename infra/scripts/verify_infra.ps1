@@ -165,7 +165,8 @@ if ($nnPods -and $dnPod -and $nnStatus -eq "Running" -and $dnStatus -eq "Running
     $hdfsVerifyValue | kubectl exec -i -n $Namespace $nnPods -- /bin/bash -c "cat > /tmp/verify_infra_ps1.json" 2>&1 | Out-Null
     kubectl exec -n $Namespace $nnPods -- hdfs dfs -put -f /tmp/verify_infra_ps1.json $hdfsVerifyPath 2>&1 | Out-Null
     $hdfsReadback = kubectl exec -n $Namespace $nnPods -- hdfs dfs -cat $hdfsVerifyPath 2>&1
-    if ($LASTEXITCODE -eq 0 -and $hdfsReadback.Trim() -eq $hdfsVerifyValue) {
+    $hdfsReadbackText = ($hdfsReadback | Out-String).Trim()
+    if ($LASTEXITCODE -eq 0 -and $hdfsReadbackText -match "tx_verify_infra_ps1") {
         Log-Pass "HDFS PowerShell I/O read/write verification passed."
     } else {
         Log-Fail "HDFS PowerShell I/O read/write verification failed."

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-batch-config
+  namespace: fraudstream
+  labels:
+    app.kubernetes.io/name: spark-batch
+    app.kubernetes.io/part-of: fraudstream
+data:
+  HDFS_DEFAULT_FS: "hdfs://hdfs-namenode.fraudstream.svc.cluster.local:9000"
+  RAW_INPUT_ROOT: "/fraud-data/raw"
+  CLEANED_OUTPUT_ROOT: "/fraud-data/cleaned"
+  INVALID_OUTPUT_ROOT: "/fraud-data/raw/invalid"
+  LATE_OUTPUT_ROOT: "/fraud-data/late_events"
+  SCHEMA_VERSION: "transaction_event_v1"
+  WATERMARK_MINUTES: "10"
+  SPARK_MASTER: "local[2]"
