@@ -7,7 +7,7 @@ PYTHON ?= python3
 KIND_CLUSTER ?= fraudstream-cluster
 NAMESPACE ?= fraudstream
 
-.PHONY: help check-tools cluster platform deploy bootstrap smoke persistence verify integration status test spark-test reproduce destroy batch-submit batch-verify
+.PHONY: help check-tools cluster platform deploy bootstrap smoke persistence verify integration status test spark-test train-baseline reproduce destroy batch-submit batch-verify
 
 help:
 	@echo "FraudStream W2 reproducibility commands"
@@ -82,6 +82,9 @@ spark-test:
 	$(PYTHON) spark-batch/spark_job.py --input-path tests/fixtures/batch/v1/transactions.jsonl --output-root "$$tmp_dir" --batch-id spark_smoke --reference-time 2026-10-04T10:00:00Z; \
 	test -n "$$(find "$$tmp_dir" -name '*.parquet' -print -quit)"; \
 	echo "PASS: PySpark batch wrote Parquet output."
+
+train-baseline:
+	@$(PYTHON) ml/baseline.py --output out/models/baseline-synthetic-v1.joblib
 
 BATCH_ID ?= batch_fixture_v1
 
