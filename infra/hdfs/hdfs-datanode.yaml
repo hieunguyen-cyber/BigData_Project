@@ -72,6 +72,35 @@ spec:
     spec:
       terminationGracePeriodSeconds: 30
 
+      # Do not start the DataNode retry loop until the NameNode RPC endpoint is
+      # reachable.  Applying both StatefulSets together otherwise creates a
+      # startup race on a fresh/restarted Kind cluster.
+      initContainers:
+        - name: wait-for-namenode-rpc
+          image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              for i in $(seq 1 60); do
+                if (echo > /dev/tcp/hdfs-namenode.fraudstream.svc.cluster.local/9000) >/dev/null 2>&1; then
+                  echo "NameNode RPC is reachable."
+                  exit 0
+                fi
+                echo "Waiting for NameNode RPC ($i/60)..."
+                sleep 2
+              done
+              echo "NameNode RPC did not become reachable within 120 seconds." >&2
+              exit 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
       # DataNode cần NameNode đã sẵn sàng trước khi đăng ký.
       # initContainers không cần thiết vì entrypoint bde2020 DataNode tự
       # retry kết nối đến NameNode. Tuy nhiên, nên deploy NameNode trước.
