@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+  namespace: fraudstream
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        uid: prometheus
+        isDefault: true
+        editable: false
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: FraudStream
+        folder: FraudStream
+        type: file
+        options: {path: /var/lib/grafana/dashboards}
+  fraudstream-overview.json: |
+    {
+      "annotations":{"list":[]}, "editable":false, "schemaVersion":39,
+      "tags":["fraudstream","operations"], "title":"FraudStream Operations Overview",
+      "uid":"fraudstream-overview", "version":2,
+      "panels":[
+        {"type":"timeseries","title":"Processed events by route","targets":[{"expr":"sum(rate(fraudstream_events_total[1m])) by (route)","legendFormat":"{{route}}"}],"gridPos":{"x":0,"y":0,"w":12,"h":8}},
+        {"type":"timeseries","title":"Fraud decisions by type","targets":[{"expr":"sum(rate(fraudstream_decisions_total[1m])) by (decision)","legendFormat":"{{decision}}"}],"gridPos":{"x":12,"y":0,"w":12,"h":8}},
+        {"type":"timeseries","title":"Scoring p95 latency","targets":[{"expr":"histogram_quantile(0.95, sum(rate(fraudstream_event_processing_seconds_bucket[5m])) by (le))","legendFormat":"p95 seconds"}],"gridPos":{"x":0,"y":8,"w":8,"h":8}},
+        {"type":"timeseries","title":"Kafka consumer lag","targets":[{"expr":"fraudstream_kafka_consumer_lag","legendFormat":"scoring lag"}],"gridPos":{"x":8,"y":8,"w":8,"h":8}},
+        {"type":"timeseries","title":"Spark input and processed rate","targets":[{"expr":"fraudstream_spark_input_rows_per_second","legendFormat":"input rows/s"},{"expr":"fraudstream_spark_processed_rows_per_second","legendFormat":"processed rows/s"}],"gridPos":{"x":16,"y":8,"w":8,"h":8}},
+        {"type":"timeseries","title":"Spark batch duration and state","targets":[{"expr":"fraudstream_spark_batch_duration_ms","legendFormat":"batch ms"},{"expr":"fraudstream_spark_state_rows","legendFormat":"state rows"}],"gridPos":{"x":0,"y":16,"w":12,"h":8}},
+        {"type":"timeseries","title":"Data quality routes","targets":[{"expr":"sum(rate(fraudstream_events_total{route=~\"invalid|duplicate|late\"}[1m])) by (route)","legendFormat":"{{route}}"}],"gridPos":{"x":12,"y":16,"w":12,"h":8}},
+        {"type":"stat","title":"Running FraudStream pods","targets":[{"expr":"sum(kube_pod_status_phase{namespace=\"fraudstream\",phase=\"Running\"})","legendFormat":"running"}],"gridPos":{"x":0,"y":24,"w":12,"h":5}},
+        {"type":"stat","title":"Pod restart count","targets":[{"expr":"sum(kube_pod_container_status_restarts_total{namespace=\"fraudstream\"})","legendFormat":"restarts"}],"gridPos":{"x":12,"y":24,"w":12,"h":5}}
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: grafana, namespace: fraudstream}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: grafana}}
+  template:
+    metadata: {labels: {app: grafana}}
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.2.0
+          ports: [{containerPort: 3000}]
+          env:
+            - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "true"}
+            - {name: GF_AUTH_ANONYMOUS_ORG_ROLE, value: Viewer}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          volumeMounts:
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasource.yaml, subPath: datasource.yaml}
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml}
+            - {name: provisioning, mountPath: /var/lib/grafana/dashboards/fraudstream-overview.json, subPath: fraudstream-overview.json}
+      volumes:
+        - name: provisioning
+          configMap: {name: grafana-provisioning}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: grafana, namespace: fraudstream}
+spec: {selector: {app: grafana}, ports: [{port: 3000, targetPort: 3000}]}

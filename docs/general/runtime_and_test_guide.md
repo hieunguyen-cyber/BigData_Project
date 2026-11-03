@@ -11,11 +11,11 @@
    the local runner is a no-op only for the same committed checksum.
 3. **Online decision engine:** `streaming/engine.py` maintains event-time
    windows and emits APPROVE/REVIEW/BLOCK plus explicit trigger reasons.
-   `streaming/stream_job.py` is the Kafka adapter and publishes alerts to
-   `fraud_alerts`.
-4. **Serving/UI:** Cassandra schema stores risk/alert records. The small Flask
-   UI in `dashboard/app.py` renders decision totals and recent decisions, with
-   `/api/summary` and `/api/decisions` for integration.
+   `streaming/stream_job.py` is the small Kafka adapter; the real Spark
+   Structured Streaming submission entry point is `streaming/spark_structured_job.py`.
+4. **Serving/UI:** Cassandra stores risk/alert records plus a bounded
+   `dashboard_recent_decision` read model. Flask renders it through `/`,
+   `/api/summary`, `/api/decisions`; `/metrics` exposes Prometheus metrics.
 
 ## Local verification
 
@@ -30,6 +30,9 @@ python3 spark-batch/spark_job.py \
   --input-path tests/fixtures/batch/v1/transactions.jsonl \
   --output-root /tmp/fraudstream-batch \
   --batch-id demo_001 --reference-time 2026-10-04T10:00:00Z
+make spark-optimization-test
+make spark-ml-test
+make benchmark
 ```
 
 The fixture acceptance result is `input=4`, `valid=1`, `invalid=1`,
@@ -58,14 +61,16 @@ pod recreation, not HA/security guarantees.
 | Batch fixture | mutually exclusive quality classification and metric reconciliation |
 | Batch idempotency | same batch/checksum is a no-op; a conflicting input is rejected |
 | PySpark smoke | real Spark JVM writes partitioned Parquet locally |
+| Spark optimization | UDF, broadcast join, sort-merge join, cache/persist, partition pruning and physical-plan artifact |
+| Spark MLlib | Logistic Regression and Random Forest training/model selection/evaluation artifact |
+| Benchmark | reproducible 1,000-event throughput and p50/p95 latency report |
 | Streaming/UI | velocity window raises alert; duplicate/invalid routing works; Flask API/UI respond |
 | Infrastructure | `make verify`, persistence scripts and `integration_smoke.py` when Kind runs |
 
-## Known local limits
+## Complete acceptance commands
 
-- Spark 4.0.1 requires a supported LTS Java runtime here; OpenJDK 17 is used.
-- The current Kafka adapter is a Python stateful reference implementation.
-  A production deployment should port state/windowing to Spark Structured
-  Streaming with checkpointed state and an exactly-once sink strategy.
-- Cassandra serving writes should be wired by the streaming deploy adapter
-  before claiming a live production dashboard.
+Spark 4.0.1 runs with OpenJDK 17. The Structured Streaming smoke submission
+uses package `org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.1` and Kafka's
+external listener at `localhost:19092`; it reads a Kafka micro-batch, persists
+the checkpoint and writes the scored output. The final roadmap checklist is in
+[`docs/week_4/limitations.md`](../week_4/limitations.md).

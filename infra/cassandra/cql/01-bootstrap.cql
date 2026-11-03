@@ -64,3 +64,20 @@ CREATE TABLE IF NOT EXISTS fraud_alert (
     PRIMARY KEY ((card_id_hash), event_time, transaction_id)
 ) WITH CLUSTERING ORDER BY (event_time DESC, transaction_id ASC)
   AND comment = 'Stores fraud alerts for operations dashboard and analyst investigation';
+
+-- Read model for the dashboard. The source tables are deliberately partitioned
+-- by card to keep online writes/query patterns bounded; a dashboard needs a
+-- separate, explicitly maintained latest-decision view instead of ALLOW
+-- FILTERING over every card partition.
+CREATE TABLE IF NOT EXISTS dashboard_recent_decision (
+    feed text,
+    event_time timestamp,
+    transaction_id text,
+    decision text,
+    risk_score double,
+    trigger_reasons list<text>,
+    card_id_hash text,
+    created_at timestamp,
+    PRIMARY KEY ((feed), event_time, transaction_id)
+) WITH CLUSTERING ORDER BY (event_time DESC, transaction_id ASC)
+  AND comment = 'Bounded latest decision read model for the FraudStream dashboard';

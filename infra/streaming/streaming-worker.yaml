@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraudstream-scoring
+  namespace: fraudstream
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: fraudstream-scoring}
+  template:
+    metadata:
+      labels: {app: fraudstream-scoring}
+    spec:
+      containers:
+        - name: scoring-worker
+          image: fraudstream-scoring:dev
+          imagePullPolicy: IfNotPresent
+          command: ["python", "streaming/stream_job.py"]
+          args: ["--bootstrap-server", "kafka:9092", "--cassandra-host", "cassandra-client", "--metrics-port", "8000"]
+          ports: [{containerPort: 8000}]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          readinessProbe:
+            tcpSocket: {port: 8000}
+            initialDelaySeconds: 5
+          livenessProbe:
+            tcpSocket: {port: 8000}
+            initialDelaySeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraudstream-scoring
+  namespace: fraudstream
+spec:
+  selector: {app: fraudstream-scoring}
+  ports: [{name: metrics, port: 8000, targetPort: 8000}]

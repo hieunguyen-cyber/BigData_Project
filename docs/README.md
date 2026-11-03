@@ -15,3 +15,7 @@ Toàn bộ tài liệu dự án được gom tại đây. Các README ở gốc 
 Điểm bắt đầu được khuyến nghị: [bài toán và kiến trúc](general/problem_and_architecture.md),
 [checkpoint 1](checkpoints/checkpoint_1.md), rồi [hướng dẫn show code](general/code_walkthrough.md).
 Để chạy, kiểm thử và demo các thành phần hiện tại, xem [runtime and test guide](general/runtime_and_test_guide.md).
+Phần UI, Prometheus, Grafana và cách kiểm thử nằm tại [observability and UI](general/observability_and_ui.md).
+Tài liệu nghiệm thu tổng hợp nằm tại [báo cáo hệ thống](checkpoints/final_system_report.md).
+Checklist đối chiếu từng yêu cầu kỹ thuật trong README, lệnh chạy và evidence
+nằm tại [nghiệm thu cuối](checkpoints/final_acceptance.md).

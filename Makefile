@@ -7,7 +7,7 @@ PYTHON ?= python3
 KIND_CLUSTER ?= fraudstream-cluster
 NAMESPACE ?= fraudstream
 
-.PHONY: help check-tools cluster platform deploy bootstrap smoke persistence verify integration status test spark-test train-baseline reproduce destroy batch-submit batch-verify
+.PHONY: help check-tools cluster platform deploy bootstrap smoke persistence verify integration status test spark-test spark-ml-test spark-optimization-test benchmark train-baseline monitoring dashboard-image scoring-image reproduce destroy batch-submit batch-verify
 
 help:
 	@echo "FraudStream W2 reproducibility commands"
@@ -18,6 +18,10 @@ help:
 	@echo "  make status        Show workload and PVC status"
 	@echo "  make test          Run repository Python tests"
 	@echo "  make spark-test    Run the real local PySpark batch smoke test"
+	@echo "  make spark-ml-test Train and evaluate the Spark MLlib baseline"
+	@echo "  make spark-optimization-test  Run UDF/join/pruning/cache/plan evidence"
+	@echo "  make benchmark      Measure scoring throughput and latency"
+	@echo "  make monitoring    Build/load dashboard and deploy dashboard, Prometheus, Grafana"
 	@echo "  make destroy CONFIRM=1  Delete the whole Kind cluster and its local data"
 
 check-tools:
@@ -78,13 +82,40 @@ test:
 
 spark-test:
 	@test -n "$$JAVA_HOME" || { echo "ERROR: Set JAVA_HOME to JDK 17+ before running Spark."; exit 1; }
-	@tmp_dir=$$(mktemp -d /tmp/fraudstream-spark-XXXXXX); \
-	$(PYTHON) spark-batch/spark_job.py --input-path tests/fixtures/batch/v1/transactions.jsonl --output-root "$$tmp_dir" --batch-id spark_smoke --reference-time 2026-10-04T10:00:00Z; \
-	test -n "$$(find "$$tmp_dir" -name '*.parquet' -print -quit)"; \
+	@tmp_dir=$$(mktemp -d /tmp/fraudstream-spark-XXXXXX) && \
+	$(PYTHON) spark-batch/spark_job.py --input-path tests/fixtures/batch/v1/transactions.jsonl --output-root "$$tmp_dir" --batch-id spark_smoke --reference-time 2026-10-04T10:00:00Z && \
+	test -n "$$(find "$$tmp_dir" -name '*.parquet' -print -quit)" && \
 	echo "PASS: PySpark batch wrote Parquet output."
 
 train-baseline:
 	@$(PYTHON) ml/baseline.py --output out/models/baseline-synthetic-v1.joblib
+
+spark-ml-test:
+	@test -n "$$JAVA_HOME" || { echo "ERROR: Set JAVA_HOME to JDK 17+ before running Spark."; exit 1; }
+	@$(PYTHON) ml/spark_mllib_train.py --output out/models/spark-mllib-v1
+
+spark-optimization-test:
+	@test -n "$$JAVA_HOME" || { echo "ERROR: Set JAVA_HOME to JDK 17+ before running Spark."; exit 1; }
+	@$(PYTHON) spark-batch/optimization_job.py --output out/spark-optimization
+
+benchmark:
+	@$(PYTHON) scripts/benchmark_streaming.py --events 1000 --output out/benchmarks/streaming.json
+
+dashboard-image: check-tools
+	@docker build -t fraudstream-dashboard:dev dashboard
+	@$(KIND) load docker-image fraudstream-dashboard:dev --name "$(KIND_CLUSTER)"
+
+scoring-image: check-tools
+	@docker build -t fraudstream-scoring:dev -f streaming/Dockerfile .
+	@$(KIND) load docker-image fraudstream-scoring:dev --name "$(KIND_CLUSTER)"
+
+monitoring: dashboard-image scoring-image
+	@$(KUBECTL) apply -f infra/dashboard/dashboard.yaml -f infra/streaming/streaming-worker.yaml -f infra/monitoring/kube-state-metrics.yaml -f infra/monitoring/prometheus.yaml -f infra/monitoring/grafana.yaml
+	@$(KUBECTL) rollout restart deployment/fraudstream-dashboard deployment/fraudstream-scoring deployment/prometheus deployment/grafana -n "$(NAMESPACE)"
+	@$(KUBECTL) rollout status deployment/fraudstream-dashboard -n "$(NAMESPACE)" --timeout=180s
+	@$(KUBECTL) rollout status deployment/fraudstream-scoring -n "$(NAMESPACE)" --timeout=180s
+	@$(KUBECTL) rollout status deployment/prometheus -n "$(NAMESPACE)" --timeout=180s
+	@$(KUBECTL) rollout status deployment/grafana -n "$(NAMESPACE)" --timeout=180s
 
 BATCH_ID ?= batch_fixture_v1
 

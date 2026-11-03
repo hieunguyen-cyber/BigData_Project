@@ -7,6 +7,7 @@ from typing import Any
 import sys
 ROOT=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(ROOT/"data-generator"))
 from schema import parse_event_time, validate_event
+from metrics import EVENTS, DECISIONS, LATENCY
 
 class StreamingEngine:
     def __init__(self, watermark_minutes=10):
@@ -16,11 +17,14 @@ class StreamingEngine:
     def _trim(q,now,delta):
         while q and q[0][0] < now-delta: q.popleft()
     def process(self,event:dict[str,Any])->dict[str,Any]:
+        with LATENCY.time():
+         return self._process(event)
+    def _process(self,event:dict[str,Any])->dict[str,Any]:
         issues=validate_event(event)
-        if issues:return {"route":"invalid","issues":issues,"event":event}
-        if event["transaction_id"] in self.seen:return {"route":"duplicate","issues":["DQ-08"],"event":event}
+        if issues: EVENTS.labels("invalid").inc(); return {"route":"invalid","issues":issues,"event":event}
+        if event["transaction_id"] in self.seen: EVENTS.labels("duplicate").inc(); return {"route":"duplicate","issues":["DQ-08"],"event":event}
         self.seen.add(event["transaction_id"]); ts=parse_event_time(event["event_time"])
-        if self.max_time and ts < self.max_time-self.watermark:return {"route":"late","issues":["DQ-09"],"event":event}
+        if self.max_time and ts < self.max_time-self.watermark: EVENTS.labels("late").inc(); return {"route":"late","issues":["DQ-09"],"event":event}
         self.max_time=max(self.max_time,ts) if self.max_time else ts
         card=self.cards[event["card_id_hash"]]; card.append((ts,event["amount"])); self._trim(card,ts,timedelta(minutes=5))
         failed=self.failures[event["card_id_hash"]]
@@ -31,4 +35,5 @@ class StreamingEngine:
         if features["tx_count_5m"]>=5:reasons.append("velocity: tx_count_5m >= 5")
         if features["failed_tx_count_10m"]>=3:reasons.append("card_testing: failed_tx_count_10m >= 3")
         if features["unique_cards_per_device_1h"]>=3:reasons.append("device_sharing: unique_cards_per_device_1h >= 3")
-        return {"route":"scored","event":event,"features":features,"risk_score":min(.99,.45+.15*len(reasons)) if reasons else .02,"decision":"BLOCK" if len(reasons)>=2 else "REVIEW" if reasons else "APPROVE","trigger_reasons":reasons,"alert":bool(reasons)}
+        decision="BLOCK" if len(reasons)>=2 else "REVIEW" if reasons else "APPROVE"; EVENTS.labels("scored").inc(); DECISIONS.labels(decision).inc()
+        return {"route":"scored","event":event,"features":features,"risk_score":min(.99,.45+.15*len(reasons)) if reasons else .02,"decision":decision,"trigger_reasons":reasons,"alert":bool(reasons)}

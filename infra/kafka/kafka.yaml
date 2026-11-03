@@ -9,9 +9,9 @@ data:
   CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
   KAFKA_NODE_ID: "1"
   KAFKA_PROCESS_ROLES: "broker,controller"
-  KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
-  KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka.fraudstream.svc.cluster.local:9092"
-  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+  KAFKA_LISTENERS: "PLAINTEXT://:9092,EXTERNAL://:9094,CONTROLLER://:9093"
+  KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka.fraudstream.svc.cluster.local:9092,EXTERNAL://localhost:19092"
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
   KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
   KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
   KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-0.kafka-headless.fraudstream.svc.cluster.local:9093"
@@ -42,6 +42,8 @@ spec:
       port: 9092
     - name: controller
       port: 9093
+    - name: external
+      port: 9094
 ---
 # Endpoint for simulator, consumer and future Spark jobs.
 apiVersion: v1
@@ -56,6 +58,9 @@ spec:
     - name: broker
       port: 9092
       targetPort: broker
+    - name: external
+      port: 9094
+      targetPort: external
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -90,6 +95,8 @@ spec:
               containerPort: 9092
             - name: controller
               containerPort: 9093
+            - name: external
+              containerPort: 9094
           resources:
             requests:
               cpu: 250m

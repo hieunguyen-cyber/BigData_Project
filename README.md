@@ -10,20 +10,20 @@ chạy `make reproduce`. Chi tiết target và review kỹ thuật nằm tại
 
 > Hệ thống phát hiện gian lận giao dịch thanh toán trực tuyến theo thời gian thực, xây dựng theo Lambda Architecture.
 
-## Tiến độ thực tế và kế hoạch W4
+## Hiện trạng triển khai và nghiệm thu
 
 | Tuần | Phần đã hoàn thành | Bằng chứng / kết quả hiện có | Phần tiếp theo |
 |---|---|---|---|
-| **W1** | Xác định bài toán, kiến trúc Lambda, data contract 12 field, simulator 5 scenario, EDA ULB, feature v1 và test chất lượng dữ liệu. | Báo cáo/biểu đồ EDA, schema validation, checker scenario và batch fixture versioned; lần kiểm tra gần nhất: **30 Python tests pass**. | Dùng contract/feature v1 làm đầu vào cho batch và streaming implementation. |
+| **W1** | Xác định bài toán, kiến trúc Lambda, data contract 12 field, simulator 5 scenario, EDA ULB, feature v1 và test chất lượng dữ liệu. | Báo cáo/biểu đồ EDA, schema validation, checker scenario và batch fixture versioned; regression cuối: **35 Python tests pass**. | Hoàn thành |
 | **W2** | Dựng hạ tầng local có thể tái lập: Kind/Kubernetes, Kafka, HDFS, Cassandra, PVC, smoke test và integration. | `make reproduce` đã chạy: simulator gửi/đọc **100 event** qua Kafka và lưu HDFS với SHA-256 kiểm chứng; có persistence tests cho Kafka/HDFS/Cassandra. | Dùng hạ tầng này làm runtime cho Spark batch và streaming layer. |
-| **W3** | Đã có batch pipeline contract, Kafka→HDFS→batch handoff và fixture valid/invalid/duplicate/late. | Quy tắc phân loại, đường dẫn data lake, Parquet partitioning và acceptance metrics đã được tài liệu hóa/test ở mức contract. | Hiện thực Spark batch raw→cleaned→curated, sau đó streaming scoring và alert. |
-| **W4 (kế hoạch)** | Đóng nghiệm thu/handoff hạ tầng W3; hiện thực nửa đầu batch pipeline. | `raw JSONL -> validation/routing -> cleaned Parquet`, run manifest, Spark runtime và verifier output. | Curated feature enrichment, ML baseline và Structured Streaming. |
+| **Batch** | Spark raw→cleaned→curated, feature windows, Parquet Snappy, manifest immutable. | `make spark-test`: fixture 4 event đạt 1 valid/1 invalid/1 duplicate/1 late, curated feature contract `feature_v1`. | Hoàn thành |
+| **ML** | Spark MLlib Logistic Regression + Random Forest, model selection và metric artifact. | `make spark-ml-test`: chọn Logistic Regression theo validation PR-AUC. | Hoàn thành |
+| **Speed + serving** | Kafka adapter, Spark Structured Streaming, watermark/checkpoint, Cassandra sinks/read model. | Spark Kafka smoke đọc 1 event, lag 0, ghi micro-batch output + checkpoint. | Hoàn thành |
+| **UI + monitoring** | Flask dashboard, Prometheus exporter/scrape, Grafana datasource/dashboard provisioning. | Prometheus dashboard + scoring targets `up=1`; browser UI hiển thị decision Cassandra. | Hoàn thành |
 
-W3 hiện mới hoàn thành ở mức **thiết kế/contract và fixture**; Spark batch runtime,
-Spark Structured Streaming, model ML và dashboard chưa được tuyên bố là đã chạy.
-Kế hoạch phân công và tiêu chí nghiệm thu cho W4 nằm tại
-[W4 target](docs/week_4/week_4_target.md). Xem chi tiết hiện trạng tại
-[Checkpoint 1](docs/checkpoints/checkpoint_1.md).
+Xem [báo cáo nghiệm thu tổng hợp](docs/checkpoints/final_system_report.md) để
+xem kiến trúc, lệnh tái lập và bằng chứng kiểm thử cuối; [W4 target](docs/week_4/week_4_target.md)
+là kế hoạch gốc đã được triển khai tiếp nối đến đủ roadmap 8 tuần.
 
 ## Mục lục file quan trọng
 
@@ -39,6 +39,7 @@ Kế hoạch phân công và tiêu chí nghiệm thu cho W4 nằm tại
 - [W2: kế hoạch](docs/week_2/week_2_target.md), [triển khai](docs/week_2/week_2_deployment.md), [evidence](docs/week_2/week_2_test_evidence.md), [review chéo](docs/week_2/week_2_cross_review.md)
 - [W3: batch pipeline contract](docs/week_3/batch_pipeline_v1.md) và [batch/streaming handoff](docs/week_3/batch_streaming_handoff.md)
 - [W4: đóng W3 và nửa đầu batch pipeline](docs/week_4/week_4_target.md)
+- [Nghiệm thu cuối: checklist README, lệnh và evidence](docs/checkpoints/final_acceptance.md)
 
 ### Mã nguồn và kiểm thử
 
