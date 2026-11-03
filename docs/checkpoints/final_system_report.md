@@ -95,6 +95,7 @@ Các metric ứng dụng:
 | Grafana | datasource/dashboard provisioning thành công; dashboard UID `fraudstream-overview` |
 | Kubernetes state | `kube-state-metrics` deployed; Prometheus queries pod phase/status and restart metrics |
 | UI browser E2E | Cassandra-backed UI hiển thị alert velocity `tx_e2e_velocity_06`: `REVIEW`, risk 0.60, lý do `tx_count_5m >= 5` |
+| Re-acceptance dashboard | `GET /healthz` trả `{"status":"ok"}`, API summary trả 50 bản ghi và pod dashboard mới có `restart=0`; probe tách khỏi Cassandra read path |
 
 ## 6. Lệnh tái lập và demo
 

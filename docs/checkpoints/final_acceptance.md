@@ -4,7 +4,9 @@
 
 Tài liệu này là checklist nghiệm thu duy nhất cho các yêu cầu kỹ thuật ở
 README mục 10–15. Mỗi hàng liên kết requirement với code, lệnh tái lập và tín
-hiệu PASS cần quan sát. Chỉ đánh dấu đạt khi lệnh tương ứng trả exit code 0.
+hiệu PASS cần quan sát. Đợt nghiệm thu lại ngày 03/11/2026 đã chạy unit,
+Spark batch/ML/optimization, benchmark, rollout dashboard và kiểm tra trực tiếp
+API/Prometheus. Chỉ đánh dấu đạt khi lệnh tương ứng trả exit code 0.
 
 ## 1. Checklist kiến trúc Lambda
 
@@ -71,3 +73,20 @@ kubectl -n fraudstream port-forward svc/grafana 3000:3000
 - Slides checkpoint: `slides/checkpoint_w1_w3/`.
 - Code/test/hạ tầng: repository root, `tests/`, `infra/`, `spark-batch/`,
   `streaming/`, `ml/`, `dashboard/`.
+
+## 6. Biên bản nghiệm thu lại (03/11/2026)
+
+| Hạng mục | Kết quả quan sát được | Kết luận |
+|---|---|---|
+| Unit + API contract | `35 passed` | Đạt |
+| Spark batch | Parquet được tạo; manifest `input=4`, `valid=1`, `invalid=1`, `duplicate=1`, `late=1`, `curated=1` | Đạt |
+| Spark MLlib | Logistic Regression được chọn; validation PR-AUC `0.7707`, test PR-AUC `0.8445` | Đạt |
+| Spark optimization | UDF, broadcast join, sort-merge join, cache và partition pruning đều `true` | Đạt |
+| Streaming engine benchmark | 1,000 events; `121,130.75 events/s`, p50 `0.0069 ms`, p95 `0.0088 ms` | Đạt |
+| Kubernetes | Cassandra, Kafka, HDFS NameNode/DataNode, dashboard, scoring, Prometheus, Grafana và kube-state-metrics đều `Running`/`Ready` | Đạt |
+| Dashboard serving | `GET /healthz` trả `{"status":"ok"}`; `GET /api/summary` trả `total=50`; pod mới `restart=0` | Đạt |
+| Monitoring | Prometheus targets `fraudstream-dashboard`, `fraudstream-scoring`, `kube-state-metrics` đều `up` | Đạt |
+
+Dashboard dùng endpoint `/healthz` độc lập với truy vấn Cassandra cho liveness
+và readiness; nhờ đó một truy vấn read model chậm không thể làm Kubernetes
+restart service. Server được chạy threaded để việc đọc feed không chặn probe.

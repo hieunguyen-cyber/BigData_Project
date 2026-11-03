@@ -23,10 +23,10 @@ spec:
             requests: {cpu: 50m, memory: 64Mi}
             limits: {cpu: 250m, memory: 256Mi}
           readinessProbe:
-            httpGet: {path: /api/summary, port: 8080}
+            httpGet: {path: /healthz, port: 8080}
             initialDelaySeconds: 3
           livenessProbe:
-            httpGet: {path: /api/summary, port: 8080}
+            httpGet: {path: /healthz, port: 8080}
             initialDelaySeconds: 10
 ---
 apiVersion: v1

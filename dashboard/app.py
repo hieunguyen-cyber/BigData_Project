@@ -28,6 +28,10 @@ def create_app(records=None):
   rows=current();return jsonify(s(rows))
  @app.get("/api/decisions")
  def decisions():return jsonify(current())
+ @app.get("/healthz")
+ def healthz():
+  """Liveness/readiness probe deliberately independent of Cassandra reads."""
+  return jsonify({"status":"ok"})
  @app.get("/metrics")
  def metrics():return Response(generate_latest(),mimetype=CONTENT_TYPE_LATEST)
  return app
